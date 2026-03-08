@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, X, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, X, ChevronDown, ChevronUp, Save, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,6 +34,12 @@ interface Props {
     stakeholders: StakeholderEntry[],
     timeline: TimelineEntry[]
   ) => void;
+  editingPolicy?: {
+    policy: PolicyScores;
+    stakeholders: StakeholderEntry[];
+    timeline: TimelineEntry[];
+  } | null;
+  onCancelEdit?: () => void;
 }
 
 const DEFAULT_STAKEHOLDERS: StakeholderEntry[] = [
@@ -58,13 +64,41 @@ const SCORE_LABELS: { key: keyof Omit<PolicyScores, "name">; label: string; colo
   { key: "intergenerational", label: "Intergenerational", color: "bg-atlas-intergenerational" },
 ];
 
-const PolicyCreationForm = ({ onCreatePolicy }: Props) => {
+const PolicyCreationForm = ({ onCreatePolicy, editingPolicy, onCancelEdit }: Props) => {
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
   const [scores, setScores] = useState({ economic: 50, wellbeing: 50, ecological: 50, intergenerational: 50 });
   const [stakeholders, setStakeholders] = useState<StakeholderEntry[]>(DEFAULT_STAKEHOLDERS.map((s) => ({ ...s })));
   const [timeline, setTimeline] = useState<TimelineEntry[]>(DEFAULT_TIMELINE.map((t) => ({ ...t })));
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  const isEditing = !!editingPolicy;
+
+  // When editingPolicy changes, populate form
+  useEffect(() => {
+    if (editingPolicy) {
+      setName(editingPolicy.policy.name);
+      setScores({
+        economic: editingPolicy.policy.economic,
+        wellbeing: editingPolicy.policy.wellbeing,
+        ecological: editingPolicy.policy.ecological,
+        intergenerational: editingPolicy.policy.intergenerational,
+      });
+      setStakeholders(editingPolicy.stakeholders.length > 0 ? editingPolicy.stakeholders.map((s) => ({ ...s })) : DEFAULT_STAKEHOLDERS.map((s) => ({ ...s })));
+      setTimeline(editingPolicy.timeline.length > 0 ? editingPolicy.timeline.map((t) => ({ ...t })) : DEFAULT_TIMELINE.map((t) => ({ ...t })));
+      setIsOpen(true);
+    }
+  }, [editingPolicy]);
+
+  const resetForm = () => {
+    setName("");
+    setScores({ economic: 50, wellbeing: 50, ecological: 50, intergenerational: 50 });
+    setStakeholders(DEFAULT_STAKEHOLDERS.map((s) => ({ ...s })));
+    setTimeline(DEFAULT_TIMELINE.map((t) => ({ ...t })));
+    setIsOpen(false);
+    setShowAdvanced(false);
+    onCancelEdit?.();
+  };
 
   const handleSubmit = () => {
     if (!name.trim()) return;
@@ -73,13 +107,7 @@ const PolicyCreationForm = ({ onCreatePolicy }: Props) => {
       stakeholders,
       timeline
     );
-    // Reset
-    setName("");
-    setScores({ economic: 50, wellbeing: 50, ecological: 50, intergenerational: 50 });
-    setStakeholders(DEFAULT_STAKEHOLDERS.map((s) => ({ ...s })));
-    setTimeline(DEFAULT_TIMELINE.map((t) => ({ ...t })));
-    setIsOpen(false);
-    setShowAdvanced(false);
+    resetForm();
   };
 
   const updateStakeholder = (i: number, field: keyof StakeholderEntry, value: string | number) => {
@@ -91,15 +119,15 @@ const PolicyCreationForm = ({ onCreatePolicy }: Props) => {
   };
 
   return (
-    <div className="rounded-lg border border-border bg-card">
+    <div className={`rounded-lg border bg-card ${isEditing ? 'border-primary/50' : 'border-border'}`}>
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => { if (isEditing) { resetForm(); } else { setIsOpen(!isOpen); } }}
         className="w-full flex items-center justify-between p-4 text-left hover:bg-secondary/50 transition-colors rounded-lg"
       >
         <div className="flex items-center gap-2">
-          <Plus className="w-4 h-4 text-primary" />
+          {isEditing ? <Pencil className="w-4 h-4 text-primary" /> : <Plus className="w-4 h-4 text-primary" />}
           <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
-            Create Custom Policy
+            {isEditing ? `Editing: ${editingPolicy?.policy.name}` : "Create Custom Policy"}
           </span>
         </div>
         {isOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
@@ -233,14 +261,26 @@ const PolicyCreationForm = ({ onCreatePolicy }: Props) => {
               </AnimatePresence>
 
               {/* Submit */}
-              <Button
-                onClick={handleSubmit}
-                disabled={!name.trim()}
-                className="w-full h-8 text-xs font-mono"
-              >
-                <Plus className="w-3 h-3 mr-1" />
-                Add Policy to Atlas
-              </Button>
+              <div className="flex gap-2">
+                {isEditing && (
+                  <Button
+                    variant="outline"
+                    onClick={resetForm}
+                    className="flex-1 h-8 text-xs font-mono"
+                  >
+                    <X className="w-3 h-3 mr-1" />
+                    Cancel
+                  </Button>
+                )}
+                <Button
+                  onClick={handleSubmit}
+                  disabled={!name.trim()}
+                  className="flex-1 h-8 text-xs font-mono"
+                >
+                  {isEditing ? <Save className="w-3 h-3 mr-1" /> : <Plus className="w-3 h-3 mr-1" />}
+                  {isEditing ? "Save Changes" : "Add Policy to Atlas"}
+                </Button>
+              </div>
             </div>
           </motion.div>
         )}

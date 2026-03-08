@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Pencil, Trash2 } from "lucide-react";
 import MoralCompass from "@/components/atlas/MoralCompass";
 import EthicalLensRadar from "@/components/atlas/EthicalLensRadar";
 import TradeoffSurface from "@/components/atlas/TradeoffSurface";
@@ -12,6 +13,7 @@ import ExportButton from "@/components/atlas/ExportButton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 
 interface Policy {
   name: string;
@@ -34,6 +36,8 @@ interface StakeholderEntry {
   population: string;
   detail: string;
 }
+
+const BUILT_IN_NAMES = new Set(["Dam Project", "Wetland Restore", "Solar Grid"]);
 
 const INITIAL_POLICIES: Policy[] = [
   { name: "Dam Project", economic: 82, wellbeing: 45, ecological: 25, intergenerational: 60 },
@@ -116,14 +120,55 @@ const Index = () => {
     setWeights((prev) => ({ ...prev, [key]: value }));
   };
 
+  const [editingPolicy, setEditingPolicy] = useState<{
+    policy: Policy;
+    stakeholders: StakeholderEntry[];
+    timeline: TimelineEntry[];
+  } | null>(null);
+
   const handleCreatePolicy = useCallback(
     (policy: Policy, stakeholders: StakeholderEntry[], timeline: TimelineEntry[]) => {
-      setPolicies((prev) => [...prev, policy]);
+      setPolicies((prev) => {
+        const existing = prev.findIndex((p) => p.name === policy.name);
+        if (existing >= 0) {
+          const updated = [...prev];
+          updated[existing] = policy;
+          return updated;
+        }
+        return [...prev, policy];
+      });
       setTimelineData((prev) => ({ ...prev, [policy.name]: timeline }));
       setStakeholderData((prev) => ({ ...prev, [policy.name]: stakeholders }));
+      setEditingPolicy(null);
     },
     []
   );
+
+  const handleDeletePolicy = useCallback((name: string) => {
+    if (BUILT_IN_NAMES.has(name)) return;
+    setPolicies((prev) => prev.filter((p) => p.name !== name));
+    setTimelineData((prev) => {
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
+    setStakeholderData((prev) => {
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
+  }, []);
+
+  const handleEditPolicy = useCallback((name: string) => {
+    if (BUILT_IN_NAMES.has(name)) return;
+    const policy = policies.find((p) => p.name === name);
+    if (!policy) return;
+    setEditingPolicy({
+      policy,
+      stakeholders: stakeholderData[name] || [],
+      timeline: timelineData[name] || [],
+    });
+  }, [policies, stakeholderData, timelineData]);
 
   const weightedPolicies = useMemo(
     () =>
@@ -192,6 +237,26 @@ const Index = () => {
                 >
                   {p.score.toFixed(1)}
                 </motion.span>
+                {!BUILT_IN_NAMES.has(p.name) && (
+                  <span className="flex items-center gap-0.5 ml-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 text-muted-foreground hover:text-primary"
+                      onClick={() => handleEditPolicy(p.name)}
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 text-muted-foreground hover:text-destructive"
+                      onClick={() => handleDeletePolicy(p.name)}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </span>
+                )}
               </motion.div>
             ))}
           </div>
@@ -205,7 +270,11 @@ const Index = () => {
         </div>
 
         {/* Policy Creation Form */}
-        <PolicyCreationForm onCreatePolicy={handleCreatePolicy} />
+        <PolicyCreationForm
+          onCreatePolicy={handleCreatePolicy}
+          editingPolicy={editingPolicy}
+          onCancelEdit={() => setEditingPolicy(null)}
+        />
 
         {/* Policy Selector + Comparison Toggle */}
         <div className="flex items-center gap-6 flex-wrap">
