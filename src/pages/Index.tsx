@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, Copy } from "lucide-react";
 import MoralCompass from "@/components/atlas/MoralCompass";
 import EthicalLensRadar from "@/components/atlas/EthicalLensRadar";
 import TradeoffSurface from "@/components/atlas/TradeoffSurface";
@@ -14,6 +14,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Policy {
   name: string;
@@ -120,6 +130,8 @@ const Index = () => {
     setWeights((prev) => ({ ...prev, [key]: value }));
   };
 
+  const [deletingPolicy, setDeletingPolicy] = useState<string | null>(null);
+
   const [editingPolicy, setEditingPolicy] = useState<{
     policy: Policy;
     stakeholders: StakeholderEntry[];
@@ -144,20 +156,36 @@ const Index = () => {
     []
   );
 
-  const handleDeletePolicy = useCallback((name: string) => {
-    if (BUILT_IN_NAMES.has(name)) return;
-    setPolicies((prev) => prev.filter((p) => p.name !== name));
+  const confirmDeletePolicy = useCallback(() => {
+    if (!deletingPolicy || BUILT_IN_NAMES.has(deletingPolicy)) return;
+    setPolicies((prev) => prev.filter((p) => p.name !== deletingPolicy));
     setTimelineData((prev) => {
       const next = { ...prev };
-      delete next[name];
+      delete next[deletingPolicy];
       return next;
     });
     setStakeholderData((prev) => {
       const next = { ...prev };
-      delete next[name];
+      delete next[deletingPolicy];
       return next;
     });
-  }, []);
+    setDeletingPolicy(null);
+  }, [deletingPolicy]);
+
+  const handleDuplicatePolicy = useCallback((name: string) => {
+    const policy = policies.find((p) => p.name === name);
+    if (!policy) return;
+    let dupName = `${name} (Copy)`;
+    let counter = 2;
+    while (policies.some((p) => p.name === dupName)) {
+      dupName = `${name} (Copy ${counter++})`;
+    }
+    setEditingPolicy({
+      policy: { ...policy, name: dupName },
+      stakeholders: stakeholderData[name] ? [...stakeholderData[name]] : [],
+      timeline: timelineData[name] ? [...timelineData[name]] : [],
+    });
+  }, [policies, stakeholderData, timelineData]);
 
   const handleEditPolicy = useCallback((name: string) => {
     if (BUILT_IN_NAMES.has(name)) return;
@@ -251,12 +279,21 @@ const Index = () => {
                       variant="ghost"
                       size="icon"
                       className="h-5 w-5 text-muted-foreground hover:text-destructive"
-                      onClick={() => handleDeletePolicy(p.name)}
+                      onClick={() => setDeletingPolicy(p.name)}
                     >
                       <Trash2 className="w-3 h-3" />
                     </Button>
                   </span>
                 )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 text-muted-foreground hover:text-accent-foreground"
+                  onClick={() => handleDuplicatePolicy(p.name)}
+                  title={`Duplicate ${p.name}`}
+                >
+                  <Copy className="w-3 h-3" />
+                </Button>
               </motion.div>
             ))}
           </div>
@@ -393,6 +430,21 @@ const Index = () => {
           </p>
         </div>
       </main>
+
+      <AlertDialog open={!!deletingPolicy} onOpenChange={(open) => !open && setDeletingPolicy(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete "{deletingPolicy}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove the policy and all its associated timeline and stakeholder data. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeletePolicy}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
