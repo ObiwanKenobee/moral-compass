@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, X, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, X, ChevronDown, ChevronUp, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,6 +34,12 @@ interface Props {
     stakeholders: StakeholderEntry[],
     timeline: TimelineEntry[]
   ) => void;
+  editingPolicy?: {
+    policy: PolicyScores;
+    stakeholders: StakeholderEntry[];
+    timeline: TimelineEntry[];
+  } | null;
+  onCancelEdit?: () => void;
 }
 
 const DEFAULT_STAKEHOLDERS: StakeholderEntry[] = [
@@ -58,13 +64,41 @@ const SCORE_LABELS: { key: keyof Omit<PolicyScores, "name">; label: string; colo
   { key: "intergenerational", label: "Intergenerational", color: "bg-atlas-intergenerational" },
 ];
 
-const PolicyCreationForm = ({ onCreatePolicy }: Props) => {
+const PolicyCreationForm = ({ onCreatePolicy, editingPolicy, onCancelEdit }: Props) => {
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
   const [scores, setScores] = useState({ economic: 50, wellbeing: 50, ecological: 50, intergenerational: 50 });
   const [stakeholders, setStakeholders] = useState<StakeholderEntry[]>(DEFAULT_STAKEHOLDERS.map((s) => ({ ...s })));
   const [timeline, setTimeline] = useState<TimelineEntry[]>(DEFAULT_TIMELINE.map((t) => ({ ...t })));
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  const isEditing = !!editingPolicy;
+
+  // When editingPolicy changes, populate form
+  useEffect(() => {
+    if (editingPolicy) {
+      setName(editingPolicy.policy.name);
+      setScores({
+        economic: editingPolicy.policy.economic,
+        wellbeing: editingPolicy.policy.wellbeing,
+        ecological: editingPolicy.policy.ecological,
+        intergenerational: editingPolicy.policy.intergenerational,
+      });
+      setStakeholders(editingPolicy.stakeholders.length > 0 ? editingPolicy.stakeholders.map((s) => ({ ...s })) : DEFAULT_STAKEHOLDERS.map((s) => ({ ...s })));
+      setTimeline(editingPolicy.timeline.length > 0 ? editingPolicy.timeline.map((t) => ({ ...t })) : DEFAULT_TIMELINE.map((t) => ({ ...t })));
+      setIsOpen(true);
+    }
+  }, [editingPolicy]);
+
+  const resetForm = () => {
+    setName("");
+    setScores({ economic: 50, wellbeing: 50, ecological: 50, intergenerational: 50 });
+    setStakeholders(DEFAULT_STAKEHOLDERS.map((s) => ({ ...s })));
+    setTimeline(DEFAULT_TIMELINE.map((t) => ({ ...t })));
+    setIsOpen(false);
+    setShowAdvanced(false);
+    onCancelEdit?.();
+  };
 
   const handleSubmit = () => {
     if (!name.trim()) return;
@@ -73,13 +107,7 @@ const PolicyCreationForm = ({ onCreatePolicy }: Props) => {
       stakeholders,
       timeline
     );
-    // Reset
-    setName("");
-    setScores({ economic: 50, wellbeing: 50, ecological: 50, intergenerational: 50 });
-    setStakeholders(DEFAULT_STAKEHOLDERS.map((s) => ({ ...s })));
-    setTimeline(DEFAULT_TIMELINE.map((t) => ({ ...t })));
-    setIsOpen(false);
-    setShowAdvanced(false);
+    resetForm();
   };
 
   const updateStakeholder = (i: number, field: keyof StakeholderEntry, value: string | number) => {
