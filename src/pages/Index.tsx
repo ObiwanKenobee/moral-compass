@@ -279,12 +279,21 @@ const Index = () => {
                       variant="ghost"
                       size="icon"
                       className="h-5 w-5 text-muted-foreground hover:text-destructive"
-                      onClick={() => handleDeletePolicy(p.name)}
+                      onClick={() => setDeletingPolicy(p.name)}
                     >
                       <Trash2 className="w-3 h-3" />
                     </Button>
                   </span>
                 )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 text-muted-foreground hover:text-accent-foreground"
+                  onClick={() => handleDuplicatePolicy(p.name)}
+                  title={`Duplicate ${p.name}`}
+                >
+                  <Copy className="w-3 h-3" />
+                </Button>
               </motion.div>
             ))}
           </div>
