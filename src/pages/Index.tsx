@@ -37,6 +37,8 @@ interface StakeholderEntry {
   detail: string;
 }
 
+const BUILT_IN_NAMES = new Set(["Dam Project", "Wetland Restore", "Solar Grid"]);
+
 const INITIAL_POLICIES: Policy[] = [
   { name: "Dam Project", economic: 82, wellbeing: 45, ecological: 25, intergenerational: 60 },
   { name: "Wetland Restore", economic: 48, wellbeing: 68, ecological: 90, intergenerational: 85 },
