@@ -261,14 +261,26 @@ const PolicyCreationForm = ({ onCreatePolicy, editingPolicy, onCancelEdit }: Pro
               </AnimatePresence>
 
               {/* Submit */}
-              <Button
-                onClick={handleSubmit}
-                disabled={!name.trim()}
-                className="w-full h-8 text-xs font-mono"
-              >
-                <Plus className="w-3 h-3 mr-1" />
-                Add Policy to Atlas
-              </Button>
+              <div className="flex gap-2">
+                {isEditing && (
+                  <Button
+                    variant="outline"
+                    onClick={resetForm}
+                    className="flex-1 h-8 text-xs font-mono"
+                  >
+                    <X className="w-3 h-3 mr-1" />
+                    Cancel
+                  </Button>
+                )}
+                <Button
+                  onClick={handleSubmit}
+                  disabled={!name.trim()}
+                  className="flex-1 h-8 text-xs font-mono"
+                >
+                  {isEditing ? <Save className="w-3 h-3 mr-1" /> : <Plus className="w-3 h-3 mr-1" />}
+                  {isEditing ? "Save Changes" : "Add Policy to Atlas"}
+                </Button>
+              </div>
             </div>
           </motion.div>
         )}
