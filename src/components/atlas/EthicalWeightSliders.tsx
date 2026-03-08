@@ -1,4 +1,5 @@
 import { Slider } from "@/components/ui/slider";
+import { motion } from "framer-motion";
 
 interface Props {
   weights: {
@@ -26,8 +27,16 @@ const PRESETS = [
 
 const EthicalWeightSliders = ({ weights, onChange }: Props) => {
   const applyPreset = (preset: typeof PRESETS[0]) => {
-    Object.entries(preset.weights).forEach(([k, v]) => onChange(k, v));
+    // Apply with slight stagger for visual effect
+    const entries = Object.entries(preset.weights);
+    entries.forEach(([k, v], i) => {
+      setTimeout(() => onChange(k, v), i * 50);
+    });
   };
+
+  const activePreset = PRESETS.find((p) =>
+    Object.entries(p.weights).every(([k, v]) => Math.abs(weights[k as keyof typeof weights] - v) < 0.02)
+  );
 
   return (
     <div className="rounded-lg border border-border bg-card p-6 atlas-glow">
@@ -41,24 +50,40 @@ const EthicalWeightSliders = ({ weights, onChange }: Props) => {
       {/* Presets */}
       <div className="flex flex-wrap gap-2 mb-6">
         {PRESETS.map((p) => (
-          <button
+          <motion.button
             key={p.name}
             onClick={() => applyPreset(p)}
-            className="px-3 py-1 text-[10px] font-mono rounded-full border border-border bg-secondary text-secondary-foreground hover:bg-primary hover:text-primary-foreground transition-colors"
+            className={`px-3 py-1 text-[10px] font-mono rounded-full border transition-colors ${
+              activePreset?.name === p.name
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border bg-secondary text-secondary-foreground hover:bg-primary hover:text-primary-foreground"
+            }`}
+            whileTap={{ scale: 0.95 }}
+            transition={{ type: "spring", stiffness: 400, damping: 17 }}
           >
             {p.name}
-          </button>
+          </motion.button>
         ))}
       </div>
 
       <div className="space-y-5">
         {DIMENSIONS.map((d) => (
-          <div key={d.key}>
+          <motion.div
+            key={d.key}
+            layout
+            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+          >
             <div className="flex items-center justify-between mb-2">
               <span className={`text-xs font-mono ${d.colorClass}`}>{d.label}</span>
-              <span className="text-xs font-mono text-muted-foreground">
+              <motion.span
+                className="text-xs font-mono text-muted-foreground"
+                key={(weights[d.key as keyof typeof weights] * 100).toFixed(0)}
+                initial={{ opacity: 0.5, y: -3 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.15 }}
+              >
                 {(weights[d.key as keyof typeof weights] * 100).toFixed(0)}%
-              </span>
+              </motion.span>
             </div>
             <Slider
               value={[weights[d.key as keyof typeof weights] * 100]}
@@ -68,7 +93,7 @@ const EthicalWeightSliders = ({ weights, onChange }: Props) => {
               step={1}
               className="cursor-pointer"
             />
-          </div>
+          </motion.div>
         ))}
       </div>
     </div>

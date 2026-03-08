@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { motion } from "framer-motion";
+import { useState, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import MoralCompass from "@/components/atlas/MoralCompass";
 import EthicalLensRadar from "@/components/atlas/EthicalLensRadar";
 import TradeoffSurface from "@/components/atlas/TradeoffSurface";
@@ -7,6 +7,9 @@ import TimelineRibbon from "@/components/atlas/TimelineRibbon";
 import StakeholderMap from "@/components/atlas/StakeholderMap";
 import EthicalWeightSliders from "@/components/atlas/EthicalWeightSliders";
 import UncertaintyPanel from "@/components/atlas/UncertaintyPanel";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 const POLICIES = [
   { name: "Dam Project", economic: 82, wellbeing: 45, ecological: 25, intergenerational: 60 },
@@ -14,20 +17,50 @@ const POLICIES = [
   { name: "Solar Grid", economic: 65, wellbeing: 72, ecological: 78, intergenerational: 88 },
 ];
 
-const TIMELINE_EVENTS = [
-  { year: "Year 1–3", positive: "Infrastructure jobs created; construction stimulus", negative: "River biodiversity declines 30%", confidence: "high" as const },
-  { year: "Year 5–10", positive: "Urban electricity stable; industrial growth", negative: "Fishery collapse begins; 2,400 displaced", confidence: "medium" as const },
-  { year: "Year 20–40", positive: "Energy infrastructure amortized", negative: "Sediment buildup reduces efficiency 40%; flood risk returns", confidence: "low" as const },
-  { year: "Year 50+", positive: "Dam decommission creates restoration opportunity", negative: "Irreversible species loss; downstream soil degradation", confidence: "low" as const },
-];
+const TIMELINE_DATA: Record<string, { year: string; positive: string; negative: string; confidence: "high" | "medium" | "low" }[]> = {
+  "Dam Project": [
+    { year: "Year 1–3", positive: "Infrastructure jobs created; construction stimulus", negative: "River biodiversity declines 30%", confidence: "high" },
+    { year: "Year 5–10", positive: "Urban electricity stable; industrial growth", negative: "Fishery collapse begins; 2,400 displaced", confidence: "medium" },
+    { year: "Year 20–40", positive: "Energy infrastructure amortized", negative: "Sediment buildup reduces efficiency 40%; flood risk returns", confidence: "low" },
+    { year: "Year 50+", positive: "Dam decommission creates restoration opportunity", negative: "Irreversible species loss; downstream soil degradation", confidence: "low" },
+  ],
+  "Wetland Restore": [
+    { year: "Year 1–3", positive: "Ecosystem recovery begins; eco-tourism seeds", negative: "High upfront cost; no immediate energy gain", confidence: "high" },
+    { year: "Year 5–10", positive: "Flood protection improves 60%; fish stocks recover", negative: "Economic returns slower than alternatives", confidence: "medium" },
+    { year: "Year 20–40", positive: "Carbon sequestration measurable; biodiversity rebounds", negative: "Maintenance costs require sustained funding", confidence: "medium" },
+    { year: "Year 50+", positive: "Self-sustaining ecosystem; climate resilience achieved", negative: "Long-term monitoring still needed", confidence: "high" },
+  ],
+  "Solar Grid": [
+    { year: "Year 1–3", positive: "Clean energy jobs; grid modernization", negative: "High capital expenditure; land use concerns", confidence: "high" },
+    { year: "Year 5–10", positive: "Energy costs drop 35%; carbon emissions halved", negative: "Battery storage waste; rare mineral dependency", confidence: "medium" },
+    { year: "Year 20–40", positive: "Energy independence; tech export potential", negative: "Panel degradation; recycling infrastructure needed", confidence: "medium" },
+    { year: "Year 50+", positive: "Fully decarbonized grid; intergenerational benefit", negative: "Technology may be obsolete; upgrade cycles", confidence: "low" },
+  ],
+};
 
-const STAKEHOLDERS = [
-  { group: "Urban Residents", benefit: 72, population: "4.2M", detail: "Stable electricity, economic growth, improved infrastructure" },
-  { group: "Rural Farmers", benefit: -45, population: "180K", detail: "Water access disrupted, farmland flooding, forced relocation" },
-  { group: "Indigenous Communities", benefit: -68, population: "12K", detail: "Sacred sites submerged, cultural heritage loss, displacement" },
-  { group: "Future Generations", benefit: -30, population: "Est. 8M+", detail: "Climate debt, reduced biodiversity inheritance, sediment costs" },
-  { group: "Aquatic Ecosystems", benefit: -82, population: "N/A", detail: "Fish migration blocked, water temperature shifts, habitat loss" },
-];
+const STAKEHOLDER_DATA: Record<string, { group: string; benefit: number; population: string; detail: string }[]> = {
+  "Dam Project": [
+    { group: "Urban Residents", benefit: 72, population: "4.2M", detail: "Stable electricity, economic growth, improved infrastructure" },
+    { group: "Rural Farmers", benefit: -45, population: "180K", detail: "Water access disrupted, farmland flooding, forced relocation" },
+    { group: "Indigenous Communities", benefit: -68, population: "12K", detail: "Sacred sites submerged, cultural heritage loss, displacement" },
+    { group: "Future Generations", benefit: -30, population: "Est. 8M+", detail: "Climate debt, reduced biodiversity inheritance, sediment costs" },
+    { group: "Aquatic Ecosystems", benefit: -82, population: "N/A", detail: "Fish migration blocked, water temperature shifts, habitat loss" },
+  ],
+  "Wetland Restore": [
+    { group: "Urban Residents", benefit: 25, population: "4.2M", detail: "Improved flood protection, water quality, recreation areas" },
+    { group: "Rural Farmers", benefit: 55, population: "180K", detail: "Natural irrigation restored, soil fertility improves" },
+    { group: "Indigenous Communities", benefit: 80, population: "12K", detail: "Cultural landscapes preserved, traditional practices restored" },
+    { group: "Future Generations", benefit: 75, population: "Est. 8M+", detail: "Carbon stored, biodiversity preserved, climate resilience" },
+    { group: "Aquatic Ecosystems", benefit: 90, population: "N/A", detail: "Habitat recovery, species return, water cycle restoration" },
+  ],
+  "Solar Grid": [
+    { group: "Urban Residents", benefit: 60, population: "4.2M", detail: "Cheaper clean energy, reduced air pollution, tech jobs" },
+    { group: "Rural Farmers", benefit: 30, population: "180K", detail: "Dual-use land possible, energy independence" },
+    { group: "Indigenous Communities", benefit: 15, population: "12K", detail: "Minimal displacement, some land use concerns" },
+    { group: "Future Generations", benefit: 85, population: "Est. 8M+", detail: "Decarbonized grid, energy security, clean air inheritance" },
+    { group: "Aquatic Ecosystems", benefit: 40, population: "N/A", detail: "Reduced thermal pollution, minimal water impact" },
+  ],
+};
 
 const UNCERTAINTY = [
   { dimension: "Economic Growth", confidence: 78, dataGaps: "Trade policy shifts", modelDisagreement: "Low (±8%)" },
@@ -36,6 +69,8 @@ const UNCERTAINTY = [
   { dimension: "Long-term Energy", confidence: 55, dataGaps: "Sediment rate uncertain", modelDisagreement: "Moderate (±25%)" },
 ];
 
+const POLICY_NAMES = POLICIES.map((p) => p.name);
+
 const Index = () => {
   const [weights, setWeights] = useState({
     economic: 0.5,
@@ -43,36 +78,38 @@ const Index = () => {
     ecological: 0.5,
     intergenerational: 0.5,
   });
+  const [selectedPolicy, setSelectedPolicy] = useState(POLICY_NAMES[0]);
+  const [comparisonMode, setComparisonMode] = useState(false);
+  const [comparisonPolicy, setComparisonPolicy] = useState(POLICY_NAMES[1]);
 
   const handleWeightChange = (key: string, value: number) => {
     setWeights((prev) => ({ ...prev, [key]: value }));
   };
 
-  // Compute weighted scores for display
-  const weightedPolicies = POLICIES.map((p) => ({
-    ...p,
-    score: (
-      p.economic * weights.economic +
-      p.wellbeing * weights.wellbeing +
-      p.ecological * weights.ecological +
-      p.intergenerational * weights.intergenerational
-    ) / ((weights.economic + weights.wellbeing + weights.ecological + weights.intergenerational) || 1),
-  })).sort((a, b) => b.score - a.score);
+  const weightedPolicies = useMemo(() =>
+    POLICIES.map((p) => ({
+      ...p,
+      score: (
+        p.economic * weights.economic +
+        p.wellbeing * weights.wellbeing +
+        p.ecological * weights.ecological +
+        p.intergenerational * weights.intergenerational
+      ) / ((weights.economic + weights.wellbeing + weights.ecological + weights.intergenerational) || 1),
+    })).sort((a, b) => b.score - a.score),
+    [weights]
+  );
+
+  const availableComparisons = POLICY_NAMES.filter((n) => n !== selectedPolicy);
 
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b border-border">
         <div className="container max-w-7xl py-6">
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
             <div className="flex items-center gap-3 mb-2">
               <div className="w-2 h-2 rounded-full bg-primary animate-pulse-glow" />
-              <h1 className="text-2xl font-display font-bold tracking-tight atlas-gradient-text">
-                ATLAS
-              </h1>
+              <h1 className="text-2xl font-display font-bold tracking-tight atlas-gradient-text">ATLAS</h1>
               <span className="text-xs font-mono text-muted-foreground border border-border rounded-full px-2 py-0.5">
                 Ethical Reasoning Engine
               </span>
@@ -86,22 +123,28 @@ const Index = () => {
 
       <main className="container max-w-7xl py-8 space-y-8">
         {/* Weighted ranking bar */}
-        <motion.div
-          className="rounded-lg border border-border bg-card p-4"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.2 }}
-        >
+        <motion.div className="rounded-lg border border-border bg-card p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
           <div className="flex items-center gap-4 flex-wrap">
-            <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">
-              Weighted Ranking
-            </span>
+            <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">Weighted Ranking</span>
             {weightedPolicies.map((p, i) => (
-              <div key={p.name} className="flex items-center gap-2">
+              <motion.div
+                key={p.name}
+                layout
+                className="flex items-center gap-2"
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              >
                 <span className="text-xs font-mono text-muted-foreground">{i + 1}.</span>
                 <span className="text-sm font-mono text-foreground">{p.name}</span>
-                <span className="text-xs font-mono text-primary">{p.score.toFixed(1)}</span>
-              </div>
+                <motion.span
+                  className="text-xs font-mono text-primary"
+                  key={p.score.toFixed(1)}
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  {p.score.toFixed(1)}
+                </motion.span>
+              </motion.div>
             ))}
           </div>
         </motion.div>
@@ -113,15 +156,116 @@ const Index = () => {
           <EthicalWeightSliders weights={weights} onChange={handleWeightChange} />
         </div>
 
+        {/* Policy Selector + Comparison Toggle */}
+        <div className="flex items-center gap-6 flex-wrap">
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">Policy</span>
+            <Select value={selectedPolicy} onValueChange={setSelectedPolicy}>
+              <SelectTrigger className="w-[180px] h-8 text-xs font-mono bg-secondary border-border">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {POLICY_NAMES.map((name) => (
+                  <SelectItem key={name} value={name} className="text-xs font-mono">{name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Switch
+              id="comparison-mode"
+              checked={comparisonMode}
+              onCheckedChange={setComparisonMode}
+            />
+            <Label htmlFor="comparison-mode" className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest cursor-pointer">
+              Compare
+            </Label>
+          </div>
+
+          <AnimatePresence>
+            {comparisonMode && (
+              <motion.div
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                className="flex items-center gap-3"
+              >
+                <span className="text-[10px] font-mono text-muted-foreground">vs</span>
+                <Select value={comparisonPolicy} onValueChange={setComparisonPolicy}>
+                  <SelectTrigger className="w-[180px] h-8 text-xs font-mono bg-secondary border-border">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableComparisons.map((name) => (
+                      <SelectItem key={name} value={name} className="text-xs font-mono">{name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
         {/* Row 2: Tradeoff Surface + Timeline */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <TradeoffSurface policies={POLICIES} />
-          <TimelineRibbon events={TIMELINE_EVENTS} policyName="Dam Project" />
+          <div className={comparisonMode ? "grid grid-cols-2 gap-4" : ""}>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={`timeline-${selectedPolicy}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.3 }}
+              >
+                <TimelineRibbon events={TIMELINE_DATA[selectedPolicy]} policyName={selectedPolicy} />
+              </motion.div>
+            </AnimatePresence>
+            {comparisonMode && (
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={`timeline-${comparisonPolicy}`}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <TimelineRibbon events={TIMELINE_DATA[comparisonPolicy]} policyName={comparisonPolicy} />
+                </motion.div>
+              </AnimatePresence>
+            )}
+          </div>
         </div>
 
         {/* Row 3: Stakeholder Map + Uncertainty */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <StakeholderMap stakeholders={STAKEHOLDERS} policyName="Dam Project" />
+          <div className={comparisonMode ? "grid grid-cols-2 gap-4" : ""}>
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={`stakeholder-${selectedPolicy}`}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.3 }}
+              >
+                <StakeholderMap stakeholders={STAKEHOLDER_DATA[selectedPolicy]} policyName={selectedPolicy} />
+              </motion.div>
+            </AnimatePresence>
+            {comparisonMode && (
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={`stakeholder-${comparisonPolicy}`}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <StakeholderMap stakeholders={STAKEHOLDER_DATA[comparisonPolicy]} policyName={comparisonPolicy} />
+                </motion.div>
+              </AnimatePresence>
+            )}
+          </div>
           <UncertaintyPanel items={UNCERTAINTY} />
         </div>
 
