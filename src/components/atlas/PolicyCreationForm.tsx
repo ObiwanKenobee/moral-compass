@@ -119,15 +119,15 @@ const PolicyCreationForm = ({ onCreatePolicy, editingPolicy, onCancelEdit }: Pro
   };
 
   return (
-    <div className="rounded-lg border border-border bg-card">
+    <div className={`rounded-lg border bg-card ${isEditing ? 'border-primary/50' : 'border-border'}`}>
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => { if (isEditing) { resetForm(); } else { setIsOpen(!isOpen); } }}
         className="w-full flex items-center justify-between p-4 text-left hover:bg-secondary/50 transition-colors rounded-lg"
       >
         <div className="flex items-center gap-2">
-          <Plus className="w-4 h-4 text-primary" />
+          {isEditing ? <Pencil className="w-4 h-4 text-primary" /> : <Plus className="w-4 h-4 text-primary" />}
           <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground">
-            Create Custom Policy
+            {isEditing ? `Editing: ${editingPolicy?.policy.name}` : "Create Custom Policy"}
           </span>
         </div>
         {isOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
