@@ -270,7 +270,11 @@ const Index = () => {
         </div>
 
         {/* Policy Creation Form */}
-        <PolicyCreationForm onCreatePolicy={handleCreatePolicy} />
+        <PolicyCreationForm
+          onCreatePolicy={handleCreatePolicy}
+          editingPolicy={editingPolicy}
+          onCancelEdit={() => setEditingPolicy(null)}
+        />
 
         {/* Policy Selector + Comparison Toggle */}
         <div className="flex items-center gap-6 flex-wrap">
