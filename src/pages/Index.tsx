@@ -237,6 +237,26 @@ const Index = () => {
                 >
                   {p.score.toFixed(1)}
                 </motion.span>
+                {!BUILT_IN_NAMES.has(p.name) && (
+                  <span className="flex items-center gap-0.5 ml-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 text-muted-foreground hover:text-primary"
+                      onClick={() => handleEditPolicy(p.name)}
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 text-muted-foreground hover:text-destructive"
+                      onClick={() => handleDeletePolicy(p.name)}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </span>
+                )}
               </motion.div>
             ))}
           </div>
