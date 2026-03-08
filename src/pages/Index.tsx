@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import MoralCompass from "@/components/atlas/MoralCompass";
 import EthicalLensRadar from "@/components/atlas/EthicalLensRadar";
@@ -7,17 +7,41 @@ import TimelineRibbon from "@/components/atlas/TimelineRibbon";
 import StakeholderMap from "@/components/atlas/StakeholderMap";
 import EthicalWeightSliders from "@/components/atlas/EthicalWeightSliders";
 import UncertaintyPanel from "@/components/atlas/UncertaintyPanel";
+import PolicyCreationForm from "@/components/atlas/PolicyCreationForm";
+import ExportButton from "@/components/atlas/ExportButton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
-const POLICIES = [
+interface Policy {
+  name: string;
+  economic: number;
+  wellbeing: number;
+  ecological: number;
+  intergenerational: number;
+}
+
+interface TimelineEntry {
+  year: string;
+  positive: string;
+  negative: string;
+  confidence: "high" | "medium" | "low";
+}
+
+interface StakeholderEntry {
+  group: string;
+  benefit: number;
+  population: string;
+  detail: string;
+}
+
+const INITIAL_POLICIES: Policy[] = [
   { name: "Dam Project", economic: 82, wellbeing: 45, ecological: 25, intergenerational: 60 },
   { name: "Wetland Restore", economic: 48, wellbeing: 68, ecological: 90, intergenerational: 85 },
   { name: "Solar Grid", economic: 65, wellbeing: 72, ecological: 78, intergenerational: 88 },
 ];
 
-const TIMELINE_DATA: Record<string, { year: string; positive: string; negative: string; confidence: "high" | "medium" | "low" }[]> = {
+const INITIAL_TIMELINE: Record<string, TimelineEntry[]> = {
   "Dam Project": [
     { year: "Year 1–3", positive: "Infrastructure jobs created; construction stimulus", negative: "River biodiversity declines 30%", confidence: "high" },
     { year: "Year 5–10", positive: "Urban electricity stable; industrial growth", negative: "Fishery collapse begins; 2,400 displaced", confidence: "medium" },
@@ -38,7 +62,7 @@ const TIMELINE_DATA: Record<string, { year: string; positive: string; negative: 
   ],
 };
 
-const STAKEHOLDER_DATA: Record<string, { group: string; benefit: number; population: string; detail: string }[]> = {
+const INITIAL_STAKEHOLDERS: Record<string, StakeholderEntry[]> = {
   "Dam Project": [
     { group: "Urban Residents", benefit: 72, population: "4.2M", detail: "Stable electricity, economic growth, improved infrastructure" },
     { group: "Rural Farmers", benefit: -45, population: "180K", detail: "Water access disrupted, farmland flooding, forced relocation" },
@@ -69,37 +93,61 @@ const UNCERTAINTY = [
   { dimension: "Long-term Energy", confidence: 55, dataGaps: "Sediment rate uncertain", modelDisagreement: "Moderate (±25%)" },
 ];
 
-const POLICY_NAMES = POLICIES.map((p) => p.name);
-
 const Index = () => {
+  const dashboardRef = useRef<HTMLDivElement>(null);
+
+  const [policies, setPolicies] = useState<Policy[]>(INITIAL_POLICIES);
+  const [timelineData, setTimelineData] = useState<Record<string, TimelineEntry[]>>(INITIAL_TIMELINE);
+  const [stakeholderData, setStakeholderData] = useState<Record<string, StakeholderEntry[]>>(INITIAL_STAKEHOLDERS);
+
   const [weights, setWeights] = useState({
     economic: 0.5,
     wellbeing: 0.5,
     ecological: 0.5,
     intergenerational: 0.5,
   });
-  const [selectedPolicy, setSelectedPolicy] = useState(POLICY_NAMES[0]);
+
+  const policyNames = useMemo(() => policies.map((p) => p.name), [policies]);
+  const [selectedPolicy, setSelectedPolicy] = useState(policyNames[0]);
   const [comparisonMode, setComparisonMode] = useState(false);
-  const [comparisonPolicy, setComparisonPolicy] = useState(POLICY_NAMES[1]);
+  const [comparisonPolicy, setComparisonPolicy] = useState(policyNames[1]);
 
   const handleWeightChange = (key: string, value: number) => {
     setWeights((prev) => ({ ...prev, [key]: value }));
   };
 
-  const weightedPolicies = useMemo(() =>
-    POLICIES.map((p) => ({
-      ...p,
-      score: (
-        p.economic * weights.economic +
-        p.wellbeing * weights.wellbeing +
-        p.ecological * weights.ecological +
-        p.intergenerational * weights.intergenerational
-      ) / ((weights.economic + weights.wellbeing + weights.ecological + weights.intergenerational) || 1),
-    })).sort((a, b) => b.score - a.score),
-    [weights]
+  const handleCreatePolicy = useCallback(
+    (policy: Policy, stakeholders: StakeholderEntry[], timeline: TimelineEntry[]) => {
+      setPolicies((prev) => [...prev, policy]);
+      setTimelineData((prev) => ({ ...prev, [policy.name]: timeline }));
+      setStakeholderData((prev) => ({ ...prev, [policy.name]: stakeholders }));
+    },
+    []
   );
 
-  const availableComparisons = POLICY_NAMES.filter((n) => n !== selectedPolicy);
+  const weightedPolicies = useMemo(
+    () =>
+      policies
+        .map((p) => ({
+          ...p,
+          score:
+            (p.economic * weights.economic +
+              p.wellbeing * weights.wellbeing +
+              p.ecological * weights.ecological +
+              p.intergenerational * weights.intergenerational) /
+            (weights.economic + weights.wellbeing + weights.ecological + weights.intergenerational || 1),
+        }))
+        .sort((a, b) => b.score - a.score),
+    [policies, weights]
+  );
+
+  const availableComparisons = policyNames.filter((n) => n !== selectedPolicy);
+
+  // Ensure selected policies are still valid
+  const safeSelected = policyNames.includes(selectedPolicy) ? selectedPolicy : policyNames[0];
+  const safeComparison = availableComparisons.includes(comparisonPolicy)
+    ? comparisonPolicy
+    : availableComparisons[0] || policyNames[0];
 
   return (
     <div className="min-h-screen bg-background">
@@ -107,32 +155,32 @@ const Index = () => {
       <header className="border-b border-border">
         <div className="container max-w-7xl py-6">
           <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-2 h-2 rounded-full bg-primary animate-pulse-glow" />
-              <h1 className="text-2xl font-display font-bold tracking-tight atlas-gradient-text">ATLAS</h1>
-              <span className="text-xs font-mono text-muted-foreground border border-border rounded-full px-2 py-0.5">
-                Ethical Reasoning Engine
-              </span>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-2 h-2 rounded-full bg-primary animate-pulse-glow" />
+                  <h1 className="text-2xl font-display font-bold tracking-tight atlas-gradient-text">ATLAS</h1>
+                  <span className="text-xs font-mono text-muted-foreground border border-border rounded-full px-2 py-0.5">
+                    Ethical Reasoning Engine
+                  </span>
+                </div>
+                <p className="text-sm text-muted-foreground font-mono max-w-2xl">
+                  Multi-lens ethical analysis system. The machine reveals the terrain — humans choose the direction.
+                </p>
+              </div>
+              <ExportButton targetRef={dashboardRef as React.RefObject<HTMLElement>} />
             </div>
-            <p className="text-sm text-muted-foreground font-mono max-w-2xl">
-              Multi-lens ethical analysis system. The machine reveals the terrain — humans choose the direction.
-            </p>
           </motion.div>
         </div>
       </header>
 
-      <main className="container max-w-7xl py-8 space-y-8">
+      <main ref={dashboardRef} className="container max-w-7xl py-8 space-y-8">
         {/* Weighted ranking bar */}
         <motion.div className="rounded-lg border border-border bg-card p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
           <div className="flex items-center gap-4 flex-wrap">
             <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">Weighted Ranking</span>
             {weightedPolicies.map((p, i) => (
-              <motion.div
-                key={p.name}
-                layout
-                className="flex items-center gap-2"
-                transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              >
+              <motion.div key={p.name} layout className="flex items-center gap-2" transition={{ type: "spring", stiffness: 300, damping: 30 }}>
                 <span className="text-xs font-mono text-muted-foreground">{i + 1}.</span>
                 <span className="text-sm font-mono text-foreground">{p.name}</span>
                 <motion.span
@@ -152,20 +200,23 @@ const Index = () => {
         {/* Row 1: Compass + Radar + Weight Sliders */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <MoralCompass weights={weights} />
-          <EthicalLensRadar policies={POLICIES} />
+          <EthicalLensRadar policies={policies} />
           <EthicalWeightSliders weights={weights} onChange={handleWeightChange} />
         </div>
+
+        {/* Policy Creation Form */}
+        <PolicyCreationForm onCreatePolicy={handleCreatePolicy} />
 
         {/* Policy Selector + Comparison Toggle */}
         <div className="flex items-center gap-6 flex-wrap">
           <div className="flex items-center gap-3">
             <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">Policy</span>
-            <Select value={selectedPolicy} onValueChange={setSelectedPolicy}>
+            <Select value={safeSelected} onValueChange={setSelectedPolicy}>
               <SelectTrigger className="w-[180px] h-8 text-xs font-mono bg-secondary border-border">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {POLICY_NAMES.map((name) => (
+                {policyNames.map((name) => (
                   <SelectItem key={name} value={name} className="text-xs font-mono">{name}</SelectItem>
                 ))}
               </SelectContent>
@@ -173,11 +224,7 @@ const Index = () => {
           </div>
 
           <div className="flex items-center gap-3">
-            <Switch
-              id="comparison-mode"
-              checked={comparisonMode}
-              onCheckedChange={setComparisonMode}
-            />
+            <Switch id="comparison-mode" checked={comparisonMode} onCheckedChange={setComparisonMode} />
             <Label htmlFor="comparison-mode" className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest cursor-pointer">
               Compare
             </Label>
@@ -192,7 +239,7 @@ const Index = () => {
                 className="flex items-center gap-3"
               >
                 <span className="text-[10px] font-mono text-muted-foreground">vs</span>
-                <Select value={comparisonPolicy} onValueChange={setComparisonPolicy}>
+                <Select value={safeComparison} onValueChange={setComparisonPolicy}>
                   <SelectTrigger className="w-[180px] h-8 text-xs font-mono bg-secondary border-border">
                     <SelectValue />
                   </SelectTrigger>
@@ -209,29 +256,29 @@ const Index = () => {
 
         {/* Row 2: Tradeoff Surface + Timeline */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <TradeoffSurface policies={POLICIES} />
+          <TradeoffSurface policies={policies} />
           <div className={comparisonMode ? "grid grid-cols-2 gap-4" : ""}>
             <AnimatePresence mode="wait">
               <motion.div
-                key={`timeline-${selectedPolicy}`}
+                key={`timeline-${safeSelected}`}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.3 }}
               >
-                <TimelineRibbon events={TIMELINE_DATA[selectedPolicy]} policyName={selectedPolicy} />
+                <TimelineRibbon events={timelineData[safeSelected] || []} policyName={safeSelected} />
               </motion.div>
             </AnimatePresence>
             {comparisonMode && (
               <AnimatePresence mode="wait">
                 <motion.div
-                  key={`timeline-${comparisonPolicy}`}
+                  key={`timeline-${safeComparison}`}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <TimelineRibbon events={TIMELINE_DATA[comparisonPolicy]} policyName={comparisonPolicy} />
+                  <TimelineRibbon events={timelineData[safeComparison] || []} policyName={safeComparison} />
                 </motion.div>
               </AnimatePresence>
             )}
@@ -243,25 +290,25 @@ const Index = () => {
           <div className={comparisonMode ? "grid grid-cols-2 gap-4" : ""}>
             <AnimatePresence mode="wait">
               <motion.div
-                key={`stakeholder-${selectedPolicy}`}
+                key={`stakeholder-${safeSelected}`}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.3 }}
               >
-                <StakeholderMap stakeholders={STAKEHOLDER_DATA[selectedPolicy]} policyName={selectedPolicy} />
+                <StakeholderMap stakeholders={stakeholderData[safeSelected] || []} policyName={safeSelected} />
               </motion.div>
             </AnimatePresence>
             {comparisonMode && (
               <AnimatePresence mode="wait">
                 <motion.div
-                  key={`stakeholder-${comparisonPolicy}`}
+                  key={`stakeholder-${safeComparison}`}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <StakeholderMap stakeholders={STAKEHOLDER_DATA[comparisonPolicy]} policyName={comparisonPolicy} />
+                  <StakeholderMap stakeholders={stakeholderData[safeComparison] || []} policyName={safeComparison} />
                 </motion.div>
               </AnimatePresence>
             )}
