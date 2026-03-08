@@ -130,6 +130,8 @@ const Index = () => {
     setWeights((prev) => ({ ...prev, [key]: value }));
   };
 
+  const [deletingPolicy, setDeletingPolicy] = useState<string | null>(null);
+
   const [editingPolicy, setEditingPolicy] = useState<{
     policy: Policy;
     stakeholders: StakeholderEntry[];
