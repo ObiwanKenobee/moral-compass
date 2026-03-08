@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Pencil, Trash2, Copy } from "lucide-react";
 import MoralCompass from "@/components/atlas/MoralCompass";
@@ -107,12 +107,53 @@ const UNCERTAINTY = [
   { dimension: "Long-term Energy", confidence: 55, dataGaps: "Sediment rate uncertain", modelDisagreement: "Moderate (±25%)" },
 ];
 
+const LS_KEYS = {
+  policies: "atlas-custom-policies",
+  timeline: "atlas-custom-timeline",
+  stakeholders: "atlas-custom-stakeholders",
+};
+
+function loadCustomData() {
+  try {
+    const customPolicies: Policy[] = JSON.parse(localStorage.getItem(LS_KEYS.policies) || "[]");
+    const customTimeline: Record<string, TimelineEntry[]> = JSON.parse(localStorage.getItem(LS_KEYS.timeline) || "{}");
+    const customStakeholders: Record<string, StakeholderEntry[]> = JSON.parse(localStorage.getItem(LS_KEYS.stakeholders) || "{}");
+    return { customPolicies, customTimeline, customStakeholders };
+  } catch {
+    return { customPolicies: [], customTimeline: {}, customStakeholders: {} };
+  }
+}
+
 const Index = () => {
   const dashboardRef = useRef<HTMLDivElement>(null);
 
-  const [policies, setPolicies] = useState<Policy[]>(INITIAL_POLICIES);
-  const [timelineData, setTimelineData] = useState<Record<string, TimelineEntry[]>>(INITIAL_TIMELINE);
-  const [stakeholderData, setStakeholderData] = useState<Record<string, StakeholderEntry[]>>(INITIAL_STAKEHOLDERS);
+  const [policies, setPolicies] = useState<Policy[]>(() => {
+    const { customPolicies } = loadCustomData();
+    return [...INITIAL_POLICIES, ...customPolicies];
+  });
+  const [timelineData, setTimelineData] = useState<Record<string, TimelineEntry[]>>(() => {
+    const { customTimeline } = loadCustomData();
+    return { ...INITIAL_TIMELINE, ...customTimeline };
+  });
+  const [stakeholderData, setStakeholderData] = useState<Record<string, StakeholderEntry[]>>(() => {
+    const { customStakeholders } = loadCustomData();
+    return { ...INITIAL_STAKEHOLDERS, ...customStakeholders };
+  });
+
+  // Persist custom policies to localStorage
+  useEffect(() => {
+    const custom = policies.filter((p) => !BUILT_IN_NAMES.has(p.name));
+    localStorage.setItem(LS_KEYS.policies, JSON.stringify(custom));
+
+    const customTimeline: Record<string, TimelineEntry[]> = {};
+    const customStakeholders: Record<string, StakeholderEntry[]> = {};
+    custom.forEach((p) => {
+      if (timelineData[p.name]) customTimeline[p.name] = timelineData[p.name];
+      if (stakeholderData[p.name]) customStakeholders[p.name] = stakeholderData[p.name];
+    });
+    localStorage.setItem(LS_KEYS.timeline, JSON.stringify(customTimeline));
+    localStorage.setItem(LS_KEYS.stakeholders, JSON.stringify(customStakeholders));
+  }, [policies, timelineData, stakeholderData]);
 
   const [weights, setWeights] = useState({
     economic: 0.5,
@@ -158,6 +199,10 @@ const Index = () => {
 
   const confirmDeletePolicy = useCallback(() => {
     if (!deletingPolicy || BUILT_IN_NAMES.has(deletingPolicy)) return;
+    // Clear edit form if the deleted policy is currently being edited
+    setEditingPolicy((prev) =>
+      prev && prev.policy.name === deletingPolicy ? null : prev
+    );
     setPolicies((prev) => prev.filter((p) => p.name !== deletingPolicy));
     setTimelineData((prev) => {
       const next = { ...prev };
