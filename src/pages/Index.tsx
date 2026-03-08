@@ -120,14 +120,55 @@ const Index = () => {
     setWeights((prev) => ({ ...prev, [key]: value }));
   };
 
+  const [editingPolicy, setEditingPolicy] = useState<{
+    policy: Policy;
+    stakeholders: StakeholderEntry[];
+    timeline: TimelineEntry[];
+  } | null>(null);
+
   const handleCreatePolicy = useCallback(
     (policy: Policy, stakeholders: StakeholderEntry[], timeline: TimelineEntry[]) => {
-      setPolicies((prev) => [...prev, policy]);
+      setPolicies((prev) => {
+        const existing = prev.findIndex((p) => p.name === policy.name);
+        if (existing >= 0) {
+          const updated = [...prev];
+          updated[existing] = policy;
+          return updated;
+        }
+        return [...prev, policy];
+      });
       setTimelineData((prev) => ({ ...prev, [policy.name]: timeline }));
       setStakeholderData((prev) => ({ ...prev, [policy.name]: stakeholders }));
+      setEditingPolicy(null);
     },
     []
   );
+
+  const handleDeletePolicy = useCallback((name: string) => {
+    if (BUILT_IN_NAMES.has(name)) return;
+    setPolicies((prev) => prev.filter((p) => p.name !== name));
+    setTimelineData((prev) => {
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
+    setStakeholderData((prev) => {
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
+  }, []);
+
+  const handleEditPolicy = useCallback((name: string) => {
+    if (BUILT_IN_NAMES.has(name)) return;
+    const policy = policies.find((p) => p.name === name);
+    if (!policy) return;
+    setEditingPolicy({
+      policy,
+      stakeholders: stakeholderData[name] || [],
+      timeline: timelineData[name] || [],
+    });
+  }, [policies, stakeholderData, timelineData]);
 
   const weightedPolicies = useMemo(
     () =>
