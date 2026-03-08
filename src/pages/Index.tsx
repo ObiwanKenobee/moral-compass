@@ -158,6 +158,10 @@ const Index = () => {
 
   const confirmDeletePolicy = useCallback(() => {
     if (!deletingPolicy || BUILT_IN_NAMES.has(deletingPolicy)) return;
+    // Clear edit form if the deleted policy is currently being edited
+    setEditingPolicy((prev) =>
+      prev && prev.policy.name === deletingPolicy ? null : prev
+    );
     setPolicies((prev) => prev.filter((p) => p.name !== deletingPolicy));
     setTimelineData((prev) => {
       const next = { ...prev };
