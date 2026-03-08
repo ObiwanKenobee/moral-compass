@@ -156,20 +156,36 @@ const Index = () => {
     []
   );
 
-  const handleDeletePolicy = useCallback((name: string) => {
-    if (BUILT_IN_NAMES.has(name)) return;
-    setPolicies((prev) => prev.filter((p) => p.name !== name));
+  const confirmDeletePolicy = useCallback(() => {
+    if (!deletingPolicy || BUILT_IN_NAMES.has(deletingPolicy)) return;
+    setPolicies((prev) => prev.filter((p) => p.name !== deletingPolicy));
     setTimelineData((prev) => {
       const next = { ...prev };
-      delete next[name];
+      delete next[deletingPolicy];
       return next;
     });
     setStakeholderData((prev) => {
       const next = { ...prev };
-      delete next[name];
+      delete next[deletingPolicy];
       return next;
     });
-  }, []);
+    setDeletingPolicy(null);
+  }, [deletingPolicy]);
+
+  const handleDuplicatePolicy = useCallback((name: string) => {
+    const policy = policies.find((p) => p.name === name);
+    if (!policy) return;
+    let dupName = `${name} (Copy)`;
+    let counter = 2;
+    while (policies.some((p) => p.name === dupName)) {
+      dupName = `${name} (Copy ${counter++})`;
+    }
+    setEditingPolicy({
+      policy: { ...policy, name: dupName },
+      stakeholders: stakeholderData[name] ? [...stakeholderData[name]] : [],
+      timeline: timelineData[name] ? [...timelineData[name]] : [],
+    });
+  }, [policies, stakeholderData, timelineData]);
 
   const handleEditPolicy = useCallback((name: string) => {
     if (BUILT_IN_NAMES.has(name)) return;
