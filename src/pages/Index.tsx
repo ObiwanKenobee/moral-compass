@@ -245,6 +245,61 @@ const Index = () => {
     });
   }, [policies, stakeholderData, timelineData]);
 
+  const handleExportPolicies = useCallback(() => {
+    const custom = policies.filter((p) => !BUILT_IN_NAMES.has(p.name));
+    if (custom.length === 0) {
+      toast.error("No custom policies to export");
+      return;
+    }
+    const exportData = {
+      version: 1,
+      policies: custom,
+      timeline: Object.fromEntries(custom.map((p) => [p.name, timelineData[p.name] || []])),
+      stakeholders: Object.fromEntries(custom.map((p) => [p.name, stakeholderData[p.name] || []])),
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+    const link = document.createElement("a");
+    link.download = `atlas-policies-${Date.now()}.json`;
+    link.href = URL.createObjectURL(blob);
+    link.click();
+    URL.revokeObjectURL(link.href);
+    toast.success(`Exported ${custom.length} custom polic${custom.length === 1 ? "y" : "ies"}`);
+  }, [policies, timelineData, stakeholderData]);
+
+  const handleImportPolicies = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const data = JSON.parse(ev.target?.result as string);
+          if (!data.policies || !Array.isArray(data.policies)) throw new Error("Invalid format");
+          let imported = 0;
+          data.policies.forEach((p: Policy) => {
+            if (BUILT_IN_NAMES.has(p.name)) return;
+            setPolicies((prev) => {
+              const exists = prev.findIndex((x) => x.name === p.name);
+              if (exists >= 0) { const u = [...prev]; u[exists] = p; return u; }
+              return [...prev, p];
+            });
+            if (data.timeline?.[p.name]) setTimelineData((prev) => ({ ...prev, [p.name]: data.timeline[p.name] }));
+            if (data.stakeholders?.[p.name]) setStakeholderData((prev) => ({ ...prev, [p.name]: data.stakeholders[p.name] }));
+            imported++;
+          });
+          toast.success(`Imported ${imported} polic${imported === 1 ? "y" : "ies"}`);
+        } catch {
+          toast.error("Failed to parse policy file");
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  }, []);
+
   const weightedPolicies = useMemo(
     () =>
       policies
