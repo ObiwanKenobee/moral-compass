@@ -386,6 +386,12 @@ const Index = () => {
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                {policies.some((p) => !BUILT_IN_NAMES.has(p.name)) && (
+                  <Button variant="outline" size="sm" onClick={() => setResettingAll(true)} className="h-8 text-xs font-mono gap-1.5 border-border text-destructive hover:text-destructive">
+                    <RotateCcw className="w-3 h-3" />
+                    Reset
+                  </Button>
+                )}
                 <Button variant="outline" size="sm" onClick={handleImportPolicies} className="h-8 text-xs font-mono gap-1.5 border-border">
                   <Upload className="w-3 h-3" />
                   Import
