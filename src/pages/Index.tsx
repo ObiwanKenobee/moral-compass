@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Pencil, Trash2, Copy, Upload, Download } from "lucide-react";
+import { motion, AnimatePresence, Reorder } from "framer-motion";
+import { Pencil, Trash2, Copy, Upload, Download, RotateCcw, GripVertical } from "lucide-react";
 import MoralCompass from "@/components/atlas/MoralCompass";
 import EthicalLensRadar from "@/components/atlas/EthicalLensRadar";
 import TradeoffSurface from "@/components/atlas/TradeoffSurface";
@@ -164,6 +164,13 @@ const Index = () => {
     intergenerational: 0.5,
   });
 
+  const [policyOrder, setPolicyOrder] = useState<string[] | null>(() => {
+    try {
+      const saved = localStorage.getItem("atlas-policy-order");
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
+
   const policyNames = useMemo(() => policies.map((p) => p.name), [policies]);
   const [selectedPolicy, setSelectedPolicy] = useState(policyNames[0]);
   const [comparisonMode, setComparisonMode] = useState(false);
@@ -266,6 +273,22 @@ const Index = () => {
     toast.success(`Exported ${custom.length} custom polic${custom.length === 1 ? "y" : "ies"}`);
   }, [policies, timelineData, stakeholderData]);
 
+  const handleResetCustomPolicies = useCallback(() => {
+    setPolicies([...INITIAL_POLICIES]);
+    setTimelineData({ ...INITIAL_TIMELINE });
+    setStakeholderData({ ...INITIAL_STAKEHOLDERS });
+    setEditingPolicy(null);
+    setDeletingPolicy(null);
+    setPolicyOrder(null);
+    localStorage.removeItem(LS_KEYS.policies);
+    localStorage.removeItem(LS_KEYS.timeline);
+    localStorage.removeItem(LS_KEYS.stakeholders);
+    localStorage.removeItem("atlas-policy-order");
+    toast.success("All custom policies cleared");
+  }, []);
+
+  const [resettingAll, setResettingAll] = useState(false);
+
   const handleImportPolicies = useCallback(() => {
     const input = document.createElement("input");
     input.type = "file";
@@ -300,21 +323,40 @@ const Index = () => {
     input.click();
   }, []);
 
-  const weightedPolicies = useMemo(
+  const scoredPolicies = useMemo(
     () =>
-      policies
-        .map((p) => ({
-          ...p,
-          score:
-            (p.economic * weights.economic +
-              p.wellbeing * weights.wellbeing +
-              p.ecological * weights.ecological +
-              p.intergenerational * weights.intergenerational) /
-            (weights.economic + weights.wellbeing + weights.ecological + weights.intergenerational || 1),
-        }))
-        .sort((a, b) => b.score - a.score),
+      policies.map((p) => ({
+        ...p,
+        score:
+          (p.economic * weights.economic +
+            p.wellbeing * weights.wellbeing +
+            p.ecological * weights.ecological +
+            p.intergenerational * weights.intergenerational) /
+          (weights.economic + weights.wellbeing + weights.ecological + weights.intergenerational || 1),
+      })),
     [policies, weights]
   );
+
+  const weightedPolicies = useMemo(() => {
+    if (policyOrder) {
+      const scoreMap = new Map(scoredPolicies.map((p) => [p.name, p]));
+      const ordered = policyOrder
+        .filter((name) => scoreMap.has(name))
+        .map((name) => scoreMap.get(name)!);
+      // Add any new policies not in the saved order
+      scoredPolicies.forEach((p) => {
+        if (!policyOrder.includes(p.name)) ordered.push(p);
+      });
+      return ordered;
+    }
+    return [...scoredPolicies].sort((a, b) => b.score - a.score);
+  }, [scoredPolicies, policyOrder]);
+
+  const handleReorder = useCallback((newOrder: typeof weightedPolicies) => {
+    const order = newOrder.map((p) => p.name);
+    setPolicyOrder(order);
+    localStorage.setItem("atlas-policy-order", JSON.stringify(order));
+  }, []);
 
   const availableComparisons = policyNames.filter((n) => n !== selectedPolicy);
 
@@ -344,6 +386,12 @@ const Index = () => {
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                {policies.some((p) => !BUILT_IN_NAMES.has(p.name)) && (
+                  <Button variant="outline" size="sm" onClick={() => setResettingAll(true)} className="h-8 text-xs font-mono gap-1.5 border-border text-destructive hover:text-destructive">
+                    <RotateCcw className="w-3 h-3" />
+                    Reset
+                  </Button>
+                )}
                 <Button variant="outline" size="sm" onClick={handleImportPolicies} className="h-8 text-xs font-mono gap-1.5 border-border">
                   <Upload className="w-3 h-3" />
                   Import
@@ -364,53 +412,66 @@ const Index = () => {
         <motion.div className="rounded-lg border border-border bg-card p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
           <div className="flex items-center gap-4 flex-wrap">
             <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">Weighted Ranking</span>
-            {weightedPolicies.map((p, i) => (
-              <motion.div key={p.name} layout className="flex items-center gap-2" transition={{ type: "spring", stiffness: 300, damping: 30 }}>
-                <span className="text-xs font-mono text-muted-foreground">{i + 1}.</span>
-                <span className="text-sm font-mono text-foreground">{p.name}</span>
-                {!BUILT_IN_NAMES.has(p.name) && (
-                  <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4 font-mono">Custom</Badge>
-                )}
-                <motion.span
-                  className="text-xs font-mono text-primary"
-                  key={p.score.toFixed(1)}
-                  initial={{ opacity: 0, y: -5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
+            <Reorder.Group
+              axis="x"
+              values={weightedPolicies}
+              onReorder={handleReorder}
+              className="flex items-center gap-4 flex-wrap"
+            >
+              {weightedPolicies.map((p, i) => (
+                <Reorder.Item
+                  key={p.name}
+                  value={p}
+                  className="flex items-center gap-2 cursor-grab active:cursor-grabbing select-none"
+                  whileDrag={{ scale: 1.05, zIndex: 10 }}
                 >
-                  {p.score.toFixed(1)}
-                </motion.span>
-                {!BUILT_IN_NAMES.has(p.name) && (
-                  <span className="flex items-center gap-0.5 ml-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-5 w-5 text-muted-foreground hover:text-primary"
-                      onClick={() => handleEditPolicy(p.name)}
-                    >
-                      <Pencil className="w-3 h-3" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-5 w-5 text-muted-foreground hover:text-destructive"
-                      onClick={() => setDeletingPolicy(p.name)}
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
-                  </span>
-                )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-5 w-5 text-muted-foreground hover:text-accent-foreground"
-                  onClick={() => handleDuplicatePolicy(p.name)}
-                  title={`Duplicate ${p.name}`}
-                >
-                  <Copy className="w-3 h-3" />
-                </Button>
-              </motion.div>
-            ))}
+                  <GripVertical className="w-3 h-3 text-muted-foreground/50" />
+                  <span className="text-xs font-mono text-muted-foreground">{i + 1}.</span>
+                  <span className="text-sm font-mono text-foreground">{p.name}</span>
+                  {!BUILT_IN_NAMES.has(p.name) && (
+                    <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4 font-mono">Custom</Badge>
+                  )}
+                  <motion.span
+                    className="text-xs font-mono text-primary"
+                    key={p.score.toFixed(1)}
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    {p.score.toFixed(1)}
+                  </motion.span>
+                  {!BUILT_IN_NAMES.has(p.name) && (
+                    <span className="flex items-center gap-0.5 ml-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 text-muted-foreground hover:text-primary"
+                        onClick={() => handleEditPolicy(p.name)}
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 text-muted-foreground hover:text-destructive"
+                        onClick={() => setDeletingPolicy(p.name)}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </span>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-5 w-5 text-muted-foreground hover:text-accent-foreground"
+                    onClick={() => handleDuplicatePolicy(p.name)}
+                    title={`Duplicate ${p.name}`}
+                  >
+                    <Copy className="w-3 h-3" />
+                  </Button>
+                </Reorder.Item>
+              ))}
+            </Reorder.Group>
           </div>
         </motion.div>
 
@@ -561,6 +622,21 @@ const Index = () => {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDeletePolicy}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={resettingAll} onOpenChange={setResettingAll}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset all custom policies?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove all custom policies and their data, restoring the dashboard to its default built-in state. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleResetCustomPolicies}>Reset All</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
