@@ -412,53 +412,66 @@ const Index = () => {
         <motion.div className="rounded-lg border border-border bg-card p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
           <div className="flex items-center gap-4 flex-wrap">
             <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">Weighted Ranking</span>
-            {weightedPolicies.map((p, i) => (
-              <motion.div key={p.name} layout className="flex items-center gap-2" transition={{ type: "spring", stiffness: 300, damping: 30 }}>
-                <span className="text-xs font-mono text-muted-foreground">{i + 1}.</span>
-                <span className="text-sm font-mono text-foreground">{p.name}</span>
-                {!BUILT_IN_NAMES.has(p.name) && (
-                  <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4 font-mono">Custom</Badge>
-                )}
-                <motion.span
-                  className="text-xs font-mono text-primary"
-                  key={p.score.toFixed(1)}
-                  initial={{ opacity: 0, y: -5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
+            <Reorder.Group
+              axis="x"
+              values={weightedPolicies}
+              onReorder={handleReorder}
+              className="flex items-center gap-4 flex-wrap"
+            >
+              {weightedPolicies.map((p, i) => (
+                <Reorder.Item
+                  key={p.name}
+                  value={p}
+                  className="flex items-center gap-2 cursor-grab active:cursor-grabbing select-none"
+                  whileDrag={{ scale: 1.05, zIndex: 10 }}
                 >
-                  {p.score.toFixed(1)}
-                </motion.span>
-                {!BUILT_IN_NAMES.has(p.name) && (
-                  <span className="flex items-center gap-0.5 ml-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-5 w-5 text-muted-foreground hover:text-primary"
-                      onClick={() => handleEditPolicy(p.name)}
-                    >
-                      <Pencil className="w-3 h-3" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-5 w-5 text-muted-foreground hover:text-destructive"
-                      onClick={() => setDeletingPolicy(p.name)}
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
-                  </span>
-                )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-5 w-5 text-muted-foreground hover:text-accent-foreground"
-                  onClick={() => handleDuplicatePolicy(p.name)}
-                  title={`Duplicate ${p.name}`}
-                >
-                  <Copy className="w-3 h-3" />
-                </Button>
-              </motion.div>
-            ))}
+                  <GripVertical className="w-3 h-3 text-muted-foreground/50" />
+                  <span className="text-xs font-mono text-muted-foreground">{i + 1}.</span>
+                  <span className="text-sm font-mono text-foreground">{p.name}</span>
+                  {!BUILT_IN_NAMES.has(p.name) && (
+                    <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4 font-mono">Custom</Badge>
+                  )}
+                  <motion.span
+                    className="text-xs font-mono text-primary"
+                    key={p.score.toFixed(1)}
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    {p.score.toFixed(1)}
+                  </motion.span>
+                  {!BUILT_IN_NAMES.has(p.name) && (
+                    <span className="flex items-center gap-0.5 ml-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 text-muted-foreground hover:text-primary"
+                        onClick={() => handleEditPolicy(p.name)}
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 text-muted-foreground hover:text-destructive"
+                        onClick={() => setDeletingPolicy(p.name)}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    </span>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-5 w-5 text-muted-foreground hover:text-accent-foreground"
+                    onClick={() => handleDuplicatePolicy(p.name)}
+                    title={`Duplicate ${p.name}`}
+                  >
+                    <Copy className="w-3 h-3" />
+                  </Button>
+                </Reorder.Item>
+              ))}
+            </Reorder.Group>
           </div>
         </motion.div>
 
