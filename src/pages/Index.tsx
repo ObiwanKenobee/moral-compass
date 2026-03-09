@@ -323,21 +323,40 @@ const Index = () => {
     input.click();
   }, []);
 
-  const weightedPolicies = useMemo(
+  const scoredPolicies = useMemo(
     () =>
-      policies
-        .map((p) => ({
-          ...p,
-          score:
-            (p.economic * weights.economic +
-              p.wellbeing * weights.wellbeing +
-              p.ecological * weights.ecological +
-              p.intergenerational * weights.intergenerational) /
-            (weights.economic + weights.wellbeing + weights.ecological + weights.intergenerational || 1),
-        }))
-        .sort((a, b) => b.score - a.score),
+      policies.map((p) => ({
+        ...p,
+        score:
+          (p.economic * weights.economic +
+            p.wellbeing * weights.wellbeing +
+            p.ecological * weights.ecological +
+            p.intergenerational * weights.intergenerational) /
+          (weights.economic + weights.wellbeing + weights.ecological + weights.intergenerational || 1),
+      })),
     [policies, weights]
   );
+
+  const weightedPolicies = useMemo(() => {
+    if (policyOrder) {
+      const scoreMap = new Map(scoredPolicies.map((p) => [p.name, p]));
+      const ordered = policyOrder
+        .filter((name) => scoreMap.has(name))
+        .map((name) => scoreMap.get(name)!);
+      // Add any new policies not in the saved order
+      scoredPolicies.forEach((p) => {
+        if (!policyOrder.includes(p.name)) ordered.push(p);
+      });
+      return ordered;
+    }
+    return [...scoredPolicies].sort((a, b) => b.score - a.score);
+  }, [scoredPolicies, policyOrder]);
+
+  const handleReorder = useCallback((newOrder: typeof weightedPolicies) => {
+    const order = newOrder.map((p) => p.name);
+    setPolicyOrder(order);
+    localStorage.setItem("atlas-policy-order", JSON.stringify(order));
+  }, []);
 
   const availableComparisons = policyNames.filter((n) => n !== selectedPolicy);
 
