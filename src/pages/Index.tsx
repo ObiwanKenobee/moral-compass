@@ -343,7 +343,17 @@ const Index = () => {
                   Multi-lens ethical analysis system. The machine reveals the terrain — humans choose the direction.
                 </p>
               </div>
-              <ExportButton targetRef={dashboardRef as React.RefObject<HTMLElement>} />
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={handleImportPolicies} className="h-8 text-xs font-mono gap-1.5 border-border">
+                  <Upload className="w-3 h-3" />
+                  Import
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleExportPolicies} className="h-8 text-xs font-mono gap-1.5 border-border">
+                  <Download className="w-3 h-3" />
+                  Export
+                </Button>
+                <ExportButton targetRef={dashboardRef as React.RefObject<HTMLElement>} />
+              </div>
             </div>
           </motion.div>
         </div>
