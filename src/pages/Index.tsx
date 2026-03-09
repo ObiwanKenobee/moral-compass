@@ -438,7 +438,9 @@ const Index = () => {
               </SelectTrigger>
               <SelectContent>
                 {policyNames.map((name) => (
-                  <SelectItem key={name} value={name} className="text-xs font-mono">{name}</SelectItem>
+                  <SelectItem key={name} value={name} className="text-xs font-mono">
+                    {name}{!BUILT_IN_NAMES.has(name) && <span className="ml-1 text-[9px] text-muted-foreground">✦</span>}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
