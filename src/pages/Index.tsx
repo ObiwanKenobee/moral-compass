@@ -368,6 +368,9 @@ const Index = () => {
               <motion.div key={p.name} layout className="flex items-center gap-2" transition={{ type: "spring", stiffness: 300, damping: 30 }}>
                 <span className="text-xs font-mono text-muted-foreground">{i + 1}.</span>
                 <span className="text-sm font-mono text-foreground">{p.name}</span>
+                {!BUILT_IN_NAMES.has(p.name) && (
+                  <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4 font-mono">Custom</Badge>
+                )}
                 <motion.span
                   className="text-xs font-mono text-primary"
                   key={p.score.toFixed(1)}
