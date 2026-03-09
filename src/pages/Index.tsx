@@ -266,6 +266,22 @@ const Index = () => {
     toast.success(`Exported ${custom.length} custom polic${custom.length === 1 ? "y" : "ies"}`);
   }, [policies, timelineData, stakeholderData]);
 
+  const handleResetCustomPolicies = useCallback(() => {
+    setPolicies([...INITIAL_POLICIES]);
+    setTimelineData({ ...INITIAL_TIMELINE });
+    setStakeholderData({ ...INITIAL_STAKEHOLDERS });
+    setEditingPolicy(null);
+    setDeletingPolicy(null);
+    setPolicyOrder(null);
+    localStorage.removeItem(LS_KEYS.policies);
+    localStorage.removeItem(LS_KEYS.timeline);
+    localStorage.removeItem(LS_KEYS.stakeholders);
+    localStorage.removeItem("atlas-policy-order");
+    toast.success("All custom policies cleared");
+  }, []);
+
+  const [resettingAll, setResettingAll] = useState(false);
+
   const handleImportPolicies = useCallback(() => {
     const input = document.createElement("input");
     input.type = "file";
