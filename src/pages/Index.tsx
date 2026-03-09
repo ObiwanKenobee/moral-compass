@@ -164,6 +164,13 @@ const Index = () => {
     intergenerational: 0.5,
   });
 
+  const [policyOrder, setPolicyOrder] = useState<string[] | null>(() => {
+    try {
+      const saved = localStorage.getItem("atlas-policy-order");
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
+
   const policyNames = useMemo(() => policies.map((p) => p.name), [policies]);
   const [selectedPolicy, setSelectedPolicy] = useState(policyNames[0]);
   const [comparisonMode, setComparisonMode] = useState(false);
