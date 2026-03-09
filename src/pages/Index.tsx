@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Pencil, Trash2, Copy } from "lucide-react";
+import { Pencil, Trash2, Copy, Upload, Download } from "lucide-react";
 import MoralCompass from "@/components/atlas/MoralCompass";
 import EthicalLensRadar from "@/components/atlas/EthicalLensRadar";
 import TradeoffSurface from "@/components/atlas/TradeoffSurface";
@@ -24,6 +24,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 
 interface Policy {
   name: string;
@@ -243,6 +245,61 @@ const Index = () => {
     });
   }, [policies, stakeholderData, timelineData]);
 
+  const handleExportPolicies = useCallback(() => {
+    const custom = policies.filter((p) => !BUILT_IN_NAMES.has(p.name));
+    if (custom.length === 0) {
+      toast.error("No custom policies to export");
+      return;
+    }
+    const exportData = {
+      version: 1,
+      policies: custom,
+      timeline: Object.fromEntries(custom.map((p) => [p.name, timelineData[p.name] || []])),
+      stakeholders: Object.fromEntries(custom.map((p) => [p.name, stakeholderData[p.name] || []])),
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+    const link = document.createElement("a");
+    link.download = `atlas-policies-${Date.now()}.json`;
+    link.href = URL.createObjectURL(blob);
+    link.click();
+    URL.revokeObjectURL(link.href);
+    toast.success(`Exported ${custom.length} custom polic${custom.length === 1 ? "y" : "ies"}`);
+  }, [policies, timelineData, stakeholderData]);
+
+  const handleImportPolicies = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json";
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const data = JSON.parse(ev.target?.result as string);
+          if (!data.policies || !Array.isArray(data.policies)) throw new Error("Invalid format");
+          let imported = 0;
+          data.policies.forEach((p: Policy) => {
+            if (BUILT_IN_NAMES.has(p.name)) return;
+            setPolicies((prev) => {
+              const exists = prev.findIndex((x) => x.name === p.name);
+              if (exists >= 0) { const u = [...prev]; u[exists] = p; return u; }
+              return [...prev, p];
+            });
+            if (data.timeline?.[p.name]) setTimelineData((prev) => ({ ...prev, [p.name]: data.timeline[p.name] }));
+            if (data.stakeholders?.[p.name]) setStakeholderData((prev) => ({ ...prev, [p.name]: data.stakeholders[p.name] }));
+            imported++;
+          });
+          toast.success(`Imported ${imported} polic${imported === 1 ? "y" : "ies"}`);
+        } catch {
+          toast.error("Failed to parse policy file");
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  }, []);
+
   const weightedPolicies = useMemo(
     () =>
       policies
@@ -286,7 +343,17 @@ const Index = () => {
                   Multi-lens ethical analysis system. The machine reveals the terrain — humans choose the direction.
                 </p>
               </div>
-              <ExportButton targetRef={dashboardRef as React.RefObject<HTMLElement>} />
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={handleImportPolicies} className="h-8 text-xs font-mono gap-1.5 border-border">
+                  <Upload className="w-3 h-3" />
+                  Import
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleExportPolicies} className="h-8 text-xs font-mono gap-1.5 border-border">
+                  <Download className="w-3 h-3" />
+                  Export
+                </Button>
+                <ExportButton targetRef={dashboardRef as React.RefObject<HTMLElement>} />
+              </div>
             </div>
           </motion.div>
         </div>
@@ -301,6 +368,9 @@ const Index = () => {
               <motion.div key={p.name} layout className="flex items-center gap-2" transition={{ type: "spring", stiffness: 300, damping: 30 }}>
                 <span className="text-xs font-mono text-muted-foreground">{i + 1}.</span>
                 <span className="text-sm font-mono text-foreground">{p.name}</span>
+                {!BUILT_IN_NAMES.has(p.name) && (
+                  <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4 font-mono">Custom</Badge>
+                )}
                 <motion.span
                   className="text-xs font-mono text-primary"
                   key={p.score.toFixed(1)}
@@ -368,7 +438,9 @@ const Index = () => {
               </SelectTrigger>
               <SelectContent>
                 {policyNames.map((name) => (
-                  <SelectItem key={name} value={name} className="text-xs font-mono">{name}</SelectItem>
+                  <SelectItem key={name} value={name} className="text-xs font-mono">
+                    {name}{!BUILT_IN_NAMES.has(name) && <span className="ml-1 text-[9px] text-muted-foreground">✦</span>}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -396,7 +468,9 @@ const Index = () => {
                   </SelectTrigger>
                   <SelectContent>
                     {availableComparisons.map((name) => (
-                      <SelectItem key={name} value={name} className="text-xs font-mono">{name}</SelectItem>
+                      <SelectItem key={name} value={name} className="text-xs font-mono">
+                        {name}{!BUILT_IN_NAMES.has(name) && <span className="ml-1 text-[9px] text-muted-foreground">✦</span>}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
