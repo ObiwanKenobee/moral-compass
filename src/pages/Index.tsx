@@ -288,7 +288,7 @@ const Index = () => {
     localStorage.removeItem(LS_KEYS.stakeholders);
     localStorage.removeItem("atlas-policy-order");
     toast.success("All custom policies cleared");
-  }, []);
+  }, [pushUndo]);
 
   const [resettingAll, setResettingAll] = useState(false);
 
