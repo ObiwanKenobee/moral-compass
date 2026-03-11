@@ -190,6 +190,7 @@ const Index = () => {
 
   const handleCreatePolicy = useCallback(
     (policy: Policy, stakeholders: StakeholderEntry[], timeline: TimelineEntry[]) => {
+      pushUndo();
       setPolicies((prev) => {
         const existing = prev.findIndex((p) => p.name === policy.name);
         if (existing >= 0) {
