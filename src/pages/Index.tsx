@@ -209,6 +209,7 @@ const Index = () => {
 
   const confirmDeletePolicy = useCallback(() => {
     if (!deletingPolicy || BUILT_IN_NAMES.has(deletingPolicy)) return;
+    pushUndo();
     // Clear edit form if the deleted policy is currently being edited
     setEditingPolicy((prev) =>
       prev && prev.policy.name === deletingPolicy ? null : prev
