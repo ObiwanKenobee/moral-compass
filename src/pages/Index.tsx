@@ -226,7 +226,7 @@ const Index = () => {
       return next;
     });
     setDeletingPolicy(null);
-  }, [deletingPolicy]);
+  }, [deletingPolicy, pushUndo]);
 
   const handleDuplicatePolicy = useCallback((name: string) => {
     const policy = policies.find((p) => p.name === name);
