@@ -365,19 +365,6 @@ const Index = () => {
     return () => window.removeEventListener("keydown", handler);
   }, [handleUndo, handleRedo]);
 
-  // Keyboard reorder handler for ranking items
-  const handleRankingKeyDown = useCallback((e: React.KeyboardEvent, index: number) => {
-    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-    e.preventDefault();
-    const order = weightedPolicies.map((p) => p.name);
-    const targetIndex = e.key === "ArrowLeft" ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= order.length) return;
-    pushUndo();
-    [order[index], order[targetIndex]] = [order[targetIndex], order[index]];
-    setPolicyOrder(order);
-    localStorage.setItem("atlas-policy-order", JSON.stringify(order));
-    // Focus will naturally stay on the element
-  }, [weightedPolicies, pushUndo]);
 
   const handleImportPolicies = useCallback(() => {
     const input = document.createElement("input");
