@@ -276,6 +276,7 @@ const Index = () => {
   }, [policies, timelineData, stakeholderData]);
 
   const handleResetCustomPolicies = useCallback(() => {
+    pushUndo();
     setPolicies([...INITIAL_POLICIES]);
     setTimelineData({ ...INITIAL_TIMELINE });
     setStakeholderData({ ...INITIAL_STAKEHOLDERS });
