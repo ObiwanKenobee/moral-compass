@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence, Reorder } from "framer-motion";
-import { Pencil, Trash2, Copy, Upload, Download, RotateCcw, GripVertical } from "lucide-react";
+import { Pencil, Trash2, Copy, Upload, Download, RotateCcw, GripVertical, Undo2, Redo2 } from "lucide-react";
 import MoralCompass from "@/components/atlas/MoralCompass";
 import EthicalLensRadar from "@/components/atlas/EthicalLensRadar";
 import TradeoffSurface from "@/components/atlas/TradeoffSurface";
