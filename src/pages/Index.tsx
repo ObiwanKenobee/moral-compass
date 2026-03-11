@@ -480,6 +480,12 @@ const Index = () => {
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={handleUndo} className="h-8 text-xs font-mono gap-1.5 border-border" title="Undo (Ctrl+Z)">
+                  <Undo2 className="w-3 h-3" />
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleRedo} className="h-8 text-xs font-mono gap-1.5 border-border" title="Redo (Ctrl+Shift+Z)">
+                  <Redo2 className="w-3 h-3" />
+                </Button>
                 {policies.some((p) => !BUILT_IN_NAMES.has(p.name)) && (
                   <Button variant="outline" size="sm" onClick={() => setResettingAll(true)} className="h-8 text-xs font-mono gap-1.5 border-border text-destructive hover:text-destructive">
                     <RotateCcw className="w-3 h-3" />
