@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence, Reorder } from "framer-motion";
-import { Pencil, Trash2, Copy, Upload, Download, RotateCcw, GripVertical } from "lucide-react";
+import { Pencil, Trash2, Copy, Upload, Download, RotateCcw, GripVertical, Undo2, Redo2 } from "lucide-react";
 import MoralCompass from "@/components/atlas/MoralCompass";
 import EthicalLensRadar from "@/components/atlas/EthicalLensRadar";
 import TradeoffSurface from "@/components/atlas/TradeoffSurface";
@@ -188,8 +188,83 @@ const Index = () => {
     timeline: TimelineEntry[];
   } | null>(null);
 
+  // ---- Undo / Redo system ----
+  interface AppSnapshot {
+    policies: Policy[];
+    timelineData: Record<string, TimelineEntry[]>;
+    stakeholderData: Record<string, StakeholderEntry[]>;
+    policyOrder: string[] | null;
+  }
+
+  const takeSnapshot = useCallback((): AppSnapshot => ({
+    policies: JSON.parse(JSON.stringify(policies)),
+    timelineData: JSON.parse(JSON.stringify(timelineData)),
+    stakeholderData: JSON.parse(JSON.stringify(stakeholderData)),
+    policyOrder: policyOrder ? [...policyOrder] : null,
+  }), [policies, timelineData, stakeholderData, policyOrder]);
+
+  const undoStackRef = useRef<AppSnapshot[]>([]);
+  const redoStackRef = useRef<AppSnapshot[]>([]);
+  const lastSnapshotRef = useRef<string>("");
+
+  const pushUndo = useCallback(() => {
+    const snap = takeSnapshot();
+    const key = JSON.stringify(snap);
+    if (key === lastSnapshotRef.current) return;
+    undoStackRef.current.push(snap);
+    if (undoStackRef.current.length > 50) undoStackRef.current.shift();
+    redoStackRef.current = [];
+    lastSnapshotRef.current = key;
+  }, [takeSnapshot]);
+
+  const applySnapshot = useCallback((snap: AppSnapshot) => {
+    setPolicies(snap.policies);
+    setTimelineData(snap.timelineData);
+    setStakeholderData(snap.stakeholderData);
+    setPolicyOrder(snap.policyOrder);
+    if (snap.policyOrder) {
+      localStorage.setItem("atlas-policy-order", JSON.stringify(snap.policyOrder));
+    } else {
+      localStorage.removeItem("atlas-policy-order");
+    }
+    lastSnapshotRef.current = JSON.stringify(snap);
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    if (undoStackRef.current.length === 0) return;
+    const current = takeSnapshot();
+    redoStackRef.current.push(current);
+    const prev = undoStackRef.current.pop()!;
+    applySnapshot(prev);
+    toast.info("Undone");
+  }, [takeSnapshot, applySnapshot]);
+
+  const handleRedo = useCallback(() => {
+    if (redoStackRef.current.length === 0) return;
+    const current = takeSnapshot();
+    undoStackRef.current.push(current);
+    const next = redoStackRef.current.pop()!;
+    applySnapshot(next);
+    toast.info("Redone");
+  }, [takeSnapshot, applySnapshot]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === "Z" || (e.key === "z" && e.shiftKey))) {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [handleUndo, handleRedo]);
+
   const handleCreatePolicy = useCallback(
     (policy: Policy, stakeholders: StakeholderEntry[], timeline: TimelineEntry[]) => {
+      pushUndo();
       setPolicies((prev) => {
         const existing = prev.findIndex((p) => p.name === policy.name);
         if (existing >= 0) {
@@ -203,11 +278,12 @@ const Index = () => {
       setStakeholderData((prev) => ({ ...prev, [policy.name]: stakeholders }));
       setEditingPolicy(null);
     },
-    []
+    [pushUndo]
   );
 
   const confirmDeletePolicy = useCallback(() => {
     if (!deletingPolicy || BUILT_IN_NAMES.has(deletingPolicy)) return;
+    pushUndo();
     // Clear edit form if the deleted policy is currently being edited
     setEditingPolicy((prev) =>
       prev && prev.policy.name === deletingPolicy ? null : prev
@@ -224,7 +300,7 @@ const Index = () => {
       return next;
     });
     setDeletingPolicy(null);
-  }, [deletingPolicy]);
+  }, [deletingPolicy, pushUndo]);
 
   const handleDuplicatePolicy = useCallback((name: string) => {
     const policy = policies.find((p) => p.name === name);
@@ -274,6 +350,7 @@ const Index = () => {
   }, [policies, timelineData, stakeholderData]);
 
   const handleResetCustomPolicies = useCallback(() => {
+    pushUndo();
     setPolicies([...INITIAL_POLICIES]);
     setTimelineData({ ...INITIAL_TIMELINE });
     setStakeholderData({ ...INITIAL_STAKEHOLDERS });
@@ -285,7 +362,7 @@ const Index = () => {
     localStorage.removeItem(LS_KEYS.stakeholders);
     localStorage.removeItem("atlas-policy-order");
     toast.success("All custom policies cleared");
-  }, []);
+  }, [pushUndo]);
 
   const [resettingAll, setResettingAll] = useState(false);
 
@@ -353,10 +430,24 @@ const Index = () => {
   }, [scoredPolicies, policyOrder]);
 
   const handleReorder = useCallback((newOrder: typeof weightedPolicies) => {
+    pushUndo();
     const order = newOrder.map((p) => p.name);
     setPolicyOrder(order);
     localStorage.setItem("atlas-policy-order", JSON.stringify(order));
-  }, []);
+  }, [pushUndo]);
+
+  // Keyboard reorder handler for ranking items
+  const handleRankingKeyDown = useCallback((e: React.KeyboardEvent, index: number) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    const order = weightedPolicies.map((p) => p.name);
+    const targetIndex = e.key === "ArrowLeft" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= order.length) return;
+    pushUndo();
+    [order[index], order[targetIndex]] = [order[targetIndex], order[index]];
+    setPolicyOrder(order);
+    localStorage.setItem("atlas-policy-order", JSON.stringify(order));
+  }, [weightedPolicies, pushUndo]);
 
   const availableComparisons = policyNames.filter((n) => n !== selectedPolicy);
 
@@ -386,6 +477,12 @@ const Index = () => {
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={handleUndo} className="h-8 text-xs font-mono gap-1.5 border-border" title="Undo (Ctrl+Z)">
+                  <Undo2 className="w-3 h-3" />
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleRedo} className="h-8 text-xs font-mono gap-1.5 border-border" title="Redo (Ctrl+Shift+Z)">
+                  <Redo2 className="w-3 h-3" />
+                </Button>
                 {policies.some((p) => !BUILT_IN_NAMES.has(p.name)) && (
                   <Button variant="outline" size="sm" onClick={() => setResettingAll(true)} className="h-8 text-xs font-mono gap-1.5 border-border text-destructive hover:text-destructive">
                     <RotateCcw className="w-3 h-3" />
@@ -422,8 +519,12 @@ const Index = () => {
                 <Reorder.Item
                   key={p.name}
                   value={p}
-                  className="flex items-center gap-2 cursor-grab active:cursor-grabbing select-none"
+                  className="flex items-center gap-2 cursor-grab active:cursor-grabbing select-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 rounded-md px-1"
                   whileDrag={{ scale: 1.05, zIndex: 10 }}
+                  tabIndex={0}
+                  onKeyDown={(e) => handleRankingKeyDown(e, i)}
+                  role="listitem"
+                  aria-label={`${p.name}, rank ${i + 1}. Use arrow keys to reorder.`}
                 >
                   <GripVertical className="w-3 h-3 text-muted-foreground/50" />
                   <span className="text-xs font-mono text-muted-foreground">{i + 1}.</span>
