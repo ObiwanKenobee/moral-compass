@@ -204,7 +204,7 @@ const Index = () => {
       setStakeholderData((prev) => ({ ...prev, [policy.name]: stakeholders }));
       setEditingPolicy(null);
     },
-    []
+    [pushUndo]
   );
 
   const confirmDeletePolicy = useCallback(() => {
