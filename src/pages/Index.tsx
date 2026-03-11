@@ -522,8 +522,12 @@ const Index = () => {
                 <Reorder.Item
                   key={p.name}
                   value={p}
-                  className="flex items-center gap-2 cursor-grab active:cursor-grabbing select-none"
+                  className="flex items-center gap-2 cursor-grab active:cursor-grabbing select-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 rounded-md px-1"
                   whileDrag={{ scale: 1.05, zIndex: 10 }}
+                  tabIndex={0}
+                  onKeyDown={(e) => handleRankingKeyDown(e, i)}
+                  role="listitem"
+                  aria-label={`${p.name}, rank ${i + 1}. Use arrow keys to reorder.`}
                 >
                   <GripVertical className="w-3 h-3 text-muted-foreground/50" />
                   <span className="text-xs font-mono text-muted-foreground">{i + 1}.</span>
