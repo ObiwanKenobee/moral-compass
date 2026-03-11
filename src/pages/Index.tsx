@@ -433,10 +433,11 @@ const Index = () => {
   }, [scoredPolicies, policyOrder]);
 
   const handleReorder = useCallback((newOrder: typeof weightedPolicies) => {
+    pushUndo();
     const order = newOrder.map((p) => p.name);
     setPolicyOrder(order);
     localStorage.setItem("atlas-policy-order", JSON.stringify(order));
-  }, []);
+  }, [pushUndo]);
 
   // Keyboard reorder handler for ranking items
   const handleRankingKeyDown = useCallback((e: React.KeyboardEvent, index: number) => {
