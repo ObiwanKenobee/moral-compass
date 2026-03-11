@@ -262,6 +262,7 @@ const Index = () => {
     return () => window.removeEventListener("keydown", handler);
   }, [handleUndo, handleRedo]);
 
+  const handleCreatePolicy = useCallback(
     (policy: Policy, stakeholders: StakeholderEntry[], timeline: TimelineEntry[]) => {
       pushUndo();
       setPolicies((prev) => {
