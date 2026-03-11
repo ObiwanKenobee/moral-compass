@@ -188,7 +188,80 @@ const Index = () => {
     timeline: TimelineEntry[];
   } | null>(null);
 
-  const handleCreatePolicy = useCallback(
+  // ---- Undo / Redo system ----
+  interface AppSnapshot {
+    policies: Policy[];
+    timelineData: Record<string, TimelineEntry[]>;
+    stakeholderData: Record<string, StakeholderEntry[]>;
+    policyOrder: string[] | null;
+  }
+
+  const takeSnapshot = useCallback((): AppSnapshot => ({
+    policies: JSON.parse(JSON.stringify(policies)),
+    timelineData: JSON.parse(JSON.stringify(timelineData)),
+    stakeholderData: JSON.parse(JSON.stringify(stakeholderData)),
+    policyOrder: policyOrder ? [...policyOrder] : null,
+  }), [policies, timelineData, stakeholderData, policyOrder]);
+
+  const undoStackRef = useRef<AppSnapshot[]>([]);
+  const redoStackRef = useRef<AppSnapshot[]>([]);
+  const lastSnapshotRef = useRef<string>("");
+
+  const pushUndo = useCallback(() => {
+    const snap = takeSnapshot();
+    const key = JSON.stringify(snap);
+    if (key === lastSnapshotRef.current) return;
+    undoStackRef.current.push(snap);
+    if (undoStackRef.current.length > 50) undoStackRef.current.shift();
+    redoStackRef.current = [];
+    lastSnapshotRef.current = key;
+  }, [takeSnapshot]);
+
+  const applySnapshot = useCallback((snap: AppSnapshot) => {
+    setPolicies(snap.policies);
+    setTimelineData(snap.timelineData);
+    setStakeholderData(snap.stakeholderData);
+    setPolicyOrder(snap.policyOrder);
+    if (snap.policyOrder) {
+      localStorage.setItem("atlas-policy-order", JSON.stringify(snap.policyOrder));
+    } else {
+      localStorage.removeItem("atlas-policy-order");
+    }
+    lastSnapshotRef.current = JSON.stringify(snap);
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    if (undoStackRef.current.length === 0) return;
+    const current = takeSnapshot();
+    redoStackRef.current.push(current);
+    const prev = undoStackRef.current.pop()!;
+    applySnapshot(prev);
+    toast.info("Undone");
+  }, [takeSnapshot, applySnapshot]);
+
+  const handleRedo = useCallback(() => {
+    if (redoStackRef.current.length === 0) return;
+    const current = takeSnapshot();
+    undoStackRef.current.push(current);
+    const next = redoStackRef.current.pop()!;
+    applySnapshot(next);
+    toast.info("Redone");
+  }, [takeSnapshot, applySnapshot]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === "Z" || (e.key === "z" && e.shiftKey))) {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [handleUndo, handleRedo]);
+
     (policy: Policy, stakeholders: StakeholderEntry[], timeline: TimelineEntry[]) => {
       pushUndo();
       setPolicies((prev) => {
