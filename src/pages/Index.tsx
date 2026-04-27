@@ -344,18 +344,22 @@ const Index = () => {
     });
   }, [policies, stakeholderData, timelineData]);
 
-  const handleExportPolicies = useCallback(() => {
+  const handleExportPolicies = useCallback((opts: { timeline: boolean; stakeholders: boolean } = { timeline: true, stakeholders: true }) => {
     const custom = policies.filter((p) => !BUILT_IN_NAMES.has(p.name));
     if (custom.length === 0) {
       toast.error("No custom policies to export");
       return;
     }
-    const exportData = {
+    const exportData: Record<string, unknown> = {
       version: 1,
       policies: custom,
-      timeline: Object.fromEntries(custom.map((p) => [p.name, timelineData[p.name] || []])),
-      stakeholders: Object.fromEntries(custom.map((p) => [p.name, stakeholderData[p.name] || []])),
     };
+    if (opts.timeline) {
+      exportData.timeline = Object.fromEntries(custom.map((p) => [p.name, timelineData[p.name] || []]));
+    }
+    if (opts.stakeholders) {
+      exportData.stakeholders = Object.fromEntries(custom.map((p) => [p.name, stakeholderData[p.name] || []]));
+    }
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
     const link = document.createElement("a");
     link.download = `atlas-policies-${Date.now()}.json`;
@@ -365,7 +369,7 @@ const Index = () => {
     toast.success(`Exported ${custom.length} custom polic${custom.length === 1 ? "y" : "ies"}`);
   }, [policies, timelineData, stakeholderData]);
 
-  const handleExportPoliciesCSV = useCallback(() => {
+  const handleExportPoliciesCSV = useCallback((opts: { timeline: boolean; stakeholders: boolean } = { timeline: true, stakeholders: true }) => {
     const custom = policies.filter((p) => !BUILT_IN_NAMES.has(p.name));
     if (custom.length === 0) {
       toast.error("No custom policies to export");
@@ -382,24 +386,26 @@ const Index = () => {
     custom.forEach((p) => {
       lines.push([p.name, p.economic, p.wellbeing, p.ecological, p.intergenerational].map(escape).join(","));
     });
-    // Section 2: Timeline
-    lines.push("");
-    lines.push("# Timeline");
-    lines.push(["policy", "year", "positive", "negative", "confidence"].join(","));
-    custom.forEach((p) => {
-      (timelineData[p.name] || []).forEach((t) => {
-        lines.push([p.name, t.year, t.positive, t.negative, t.confidence].map(escape).join(","));
+    if (opts.timeline) {
+      lines.push("");
+      lines.push("# Timeline");
+      lines.push(["policy", "year", "positive", "negative", "confidence"].join(","));
+      custom.forEach((p) => {
+        (timelineData[p.name] || []).forEach((t) => {
+          lines.push([p.name, t.year, t.positive, t.negative, t.confidence].map(escape).join(","));
+        });
       });
-    });
-    // Section 3: Stakeholders
-    lines.push("");
-    lines.push("# Stakeholders");
-    lines.push(["policy", "group", "benefit", "population", "detail"].join(","));
-    custom.forEach((p) => {
-      (stakeholderData[p.name] || []).forEach((s) => {
-        lines.push([p.name, s.group, s.benefit, s.population, s.detail].map(escape).join(","));
+    }
+    if (opts.stakeholders) {
+      lines.push("");
+      lines.push("# Stakeholders");
+      lines.push(["policy", "group", "benefit", "population", "detail"].join(","));
+      custom.forEach((p) => {
+        (stakeholderData[p.name] || []).forEach((s) => {
+          lines.push([p.name, s.group, s.benefit, s.population, s.detail].map(escape).join(","));
+        });
       });
-    });
+    }
     const blob = new Blob([lines.join("\n")], { type: "text/csv" });
     const link = document.createElement("a");
     link.download = `atlas-policies-${Date.now()}.csv`;
