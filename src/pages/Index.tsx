@@ -10,6 +10,7 @@ import EthicalWeightSliders from "@/components/atlas/EthicalWeightSliders";
 import UncertaintyPanel from "@/components/atlas/UncertaintyPanel";
 import PolicyCreationForm from "@/components/atlas/PolicyCreationForm";
 import ExportButton from "@/components/atlas/ExportButton";
+import ThemeToggle from "@/components/atlas/ThemeToggle";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -24,6 +25,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 
