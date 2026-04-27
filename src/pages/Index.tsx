@@ -701,6 +701,28 @@ const Index = () => {
       <main ref={dashboardRef} className="container max-w-7xl py-8 space-y-8">
         {/* Weighted ranking bar */}
         <motion.div className="rounded-lg border border-border bg-card p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
+          <div className="flex items-center justify-between gap-4 flex-wrap mb-2">
+            <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">
+              Keyboard: <kbd className="px-1 py-0.5 rounded border border-border bg-muted/40 text-foreground/80 mx-0.5">Tab</kbd> to focus ·
+              <kbd className="px-1 py-0.5 rounded border border-border bg-muted/40 text-foreground/80 mx-0.5">←</kbd>
+              <kbd className="px-1 py-0.5 rounded border border-border bg-muted/40 text-foreground/80 mx-0.5">→</kbd> to reorder ·
+              <kbd className="px-1 py-0.5 rounded border border-border bg-muted/40 text-foreground/80 mx-0.5">Ctrl</kbd>+
+              <kbd className="px-1 py-0.5 rounded border border-border bg-muted/40 text-foreground/80 mx-0.5">Shift</kbd>+
+              <kbd className="px-1 py-0.5 rounded border border-border bg-muted/40 text-foreground/80 mx-0.5">R</kbd> to reset order
+            </span>
+            {policyOrder && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleResetPolicyOrder}
+                className="h-6 text-[10px] font-mono text-muted-foreground hover:text-foreground"
+                title="Reset ranking order (Ctrl+Shift+R)"
+              >
+                <RotateCcw className="w-3 h-3 mr-1" />
+                Reset order
+              </Button>
+            )}
+          </div>
           <div className="flex items-center gap-4 flex-wrap">
             <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">Weighted Ranking</span>
             <Reorder.Group
