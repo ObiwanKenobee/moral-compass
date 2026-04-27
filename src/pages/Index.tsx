@@ -544,11 +544,24 @@ const Index = () => {
                   <Upload className="w-3 h-3" />
                   Import
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleExportPolicies} className="h-8 text-xs font-mono gap-1.5 border-border">
-                  <Download className="w-3 h-3" />
-                  Export
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8 text-xs font-mono gap-1.5 border-border">
+                      <Download className="w-3 h-3" />
+                      Export
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="font-mono text-xs">
+                    <DropdownMenuItem onClick={handleExportPolicies} className="text-xs">
+                      Export as JSON
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleExportPoliciesCSV} className="text-xs">
+                      Export as CSV
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <ExportButton targetRef={dashboardRef as React.RefObject<HTMLElement>} />
+                <ThemeToggle />
               </div>
             </div>
           </motion.div>
