@@ -664,11 +664,17 @@ const Index = () => {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="font-mono text-xs">
-                    <DropdownMenuItem onClick={handleExportPolicies} className="text-xs">
-                      Export as JSON
+                    <DropdownMenuItem
+                      onClick={() => setExportOptions((o) => ({ ...o, open: true, format: "json" }))}
+                      className="text-xs"
+                    >
+                      Export as JSON…
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleExportPoliciesCSV} className="text-xs">
-                      Export as CSV
+                    <DropdownMenuItem
+                      onClick={() => setExportOptions((o) => ({ ...o, open: true, format: "csv" }))}
+                      className="text-xs"
+                    >
+                      Export as CSV…
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
