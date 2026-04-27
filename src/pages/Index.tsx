@@ -431,6 +431,23 @@ const Index = () => {
   }, [pushUndo]);
 
   const [resettingAll, setResettingAll] = useState(false);
+  const [exportOptions, setExportOptions] = useState<{
+    open: boolean;
+    format: "json" | "csv";
+    timeline: boolean;
+    stakeholders: boolean;
+  }>({ open: false, format: "json", timeline: true, stakeholders: true });
+
+  const handleResetPolicyOrder = useCallback(() => {
+    if (!policyOrder) {
+      toast.info("Already using default ranking order");
+      return;
+    }
+    pushUndo();
+    setPolicyOrder(null);
+    localStorage.removeItem("atlas-policy-order");
+    toast.success("Ranking order reset to default");
+  }, [policyOrder, pushUndo]);
 
   const handleImportPolicies = useCallback(() => {
     const input = document.createElement("input");
