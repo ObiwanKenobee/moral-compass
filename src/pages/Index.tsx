@@ -67,6 +67,77 @@ interface StakeholderEntry {
 
 const BUILT_IN_NAMES = new Set(["Dam Project", "Wetland Restore", "Solar Grid"]);
 
+// Parse a CSV line respecting quoted fields with embedded commas / escaped quotes.
+const parseCsvLine = (line: string): string[] => {
+  const out: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+      else if (ch === '"') { inQuotes = false; }
+      else { cur += ch; }
+    } else {
+      if (ch === ',') { out.push(cur); cur = ""; }
+      else if (ch === '"') { inQuotes = true; }
+      else { cur += ch; }
+    }
+  }
+  out.push(cur);
+  return out;
+};
+
+const parsePoliciesCsv = (text: string): {
+  policies: Policy[];
+  timeline: Record<string, TimelineEntry[]>;
+  stakeholders: Record<string, StakeholderEntry[]>;
+} => {
+  const policies: Policy[] = [];
+  const timeline: Record<string, TimelineEntry[]> = {};
+  const stakeholders: Record<string, StakeholderEntry[]> = {};
+  const rawLines = text.split(/\r?\n/);
+  let section: "policies" | "timeline" | "stakeholders" | null = null;
+  let headerSeen = false;
+  for (const raw of rawLines) {
+    const line = raw;
+    if (line.trim() === "") { headerSeen = false; continue; }
+    if (line.startsWith("#")) {
+      const tag = line.replace(/^#\s*/, "").trim().toLowerCase();
+      if (tag.startsWith("polic")) section = "policies";
+      else if (tag.startsWith("timeline")) section = "timeline";
+      else if (tag.startsWith("stakeholder")) section = "stakeholders";
+      else section = null;
+      headerSeen = false;
+      continue;
+    }
+    if (!section) continue;
+    if (!headerSeen) { headerSeen = true; continue; }
+    const cells = parseCsvLine(line);
+    if (section === "policies") {
+      const [name, eco, well, ecol, inter] = cells;
+      if (!name) continue;
+      policies.push({
+        name,
+        economic: Number(eco) || 0,
+        wellbeing: Number(well) || 0,
+        ecological: Number(ecol) || 0,
+        intergenerational: Number(inter) || 0,
+      });
+    } else if (section === "timeline") {
+      const [policy, year, positive, negative, confidence] = cells;
+      if (!policy) continue;
+      const conf = (["high", "medium", "low"].includes(confidence) ? confidence : "medium") as TimelineEntry["confidence"];
+      (timeline[policy] ||= []).push({ year, positive, negative, confidence: conf });
+    } else if (section === "stakeholders") {
+      const [policy, group, benefit, population, detail] = cells;
+      if (!policy) continue;
+      (stakeholders[policy] ||= []).push({ group, benefit: Number(benefit) || 0, population, detail });
+    }
+  }
+  return { policies, timeline, stakeholders };
+};
+
 const INITIAL_POLICIES: Policy[] = [
   { name: "Dam Project", economic: 82, wellbeing: 45, ecological: 25, intergenerational: 60 },
   { name: "Wetland Restore", economic: 48, wellbeing: 68, ecological: 90, intergenerational: 85 },
