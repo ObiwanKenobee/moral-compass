@@ -957,6 +957,50 @@ const Index = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={exportOptions.open} onOpenChange={(open) => setExportOptions((o) => ({ ...o, open }))}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-mono text-sm uppercase tracking-widest">
+              Export as {exportOptions.format.toUpperCase()}
+            </DialogTitle>
+            <DialogDescription className="font-mono text-xs">
+              Choose which sections to include in the exported file. Custom policies are always included.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <Checkbox
+                checked={exportOptions.timeline}
+                onCheckedChange={(v) => setExportOptions((o) => ({ ...o, timeline: !!v }))}
+              />
+              <span className="text-sm font-mono">Include Timeline</span>
+            </label>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <Checkbox
+                checked={exportOptions.stakeholders}
+                onCheckedChange={(v) => setExportOptions((o) => ({ ...o, stakeholders: !!v }))}
+              />
+              <span className="text-sm font-mono">Include Stakeholders</span>
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExportOptions((o) => ({ ...o, open: false }))}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                const opts = { timeline: exportOptions.timeline, stakeholders: exportOptions.stakeholders };
+                if (exportOptions.format === "json") handleExportPolicies(opts);
+                else handleExportPoliciesCSV(opts);
+                setExportOptions((o) => ({ ...o, open: false }));
+              }}
+            >
+              Export
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
