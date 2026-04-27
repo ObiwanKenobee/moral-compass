@@ -452,15 +452,24 @@ const Index = () => {
   const handleImportPolicies = useCallback(() => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".json";
+    input.accept = ".json,.csv";
     input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
       const reader = new FileReader();
       reader.onload = (ev) => {
+        const text = ev.target?.result as string;
+        const isCsv = file.name.toLowerCase().endsWith(".csv");
         try {
-          const data = JSON.parse(ev.target?.result as string);
-          if (!data.policies || !Array.isArray(data.policies)) throw new Error("Invalid format");
+          let data: { policies: Policy[]; timeline?: Record<string, TimelineEntry[]>; stakeholders?: Record<string, StakeholderEntry[]> };
+          if (isCsv) {
+            data = parsePoliciesCsv(text);
+          } else {
+            data = JSON.parse(text);
+          }
+          if (!data.policies || !Array.isArray(data.policies) || data.policies.length === 0) {
+            throw new Error("Invalid format");
+          }
           let imported = 0;
           data.policies.forEach((p: Policy) => {
             if (BUILT_IN_NAMES.has(p.name)) return;
