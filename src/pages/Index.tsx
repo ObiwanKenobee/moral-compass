@@ -33,6 +33,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface Policy {
   name: string;
@@ -57,6 +66,77 @@ interface StakeholderEntry {
 }
 
 const BUILT_IN_NAMES = new Set(["Dam Project", "Wetland Restore", "Solar Grid"]);
+
+// Parse a CSV line respecting quoted fields with embedded commas / escaped quotes.
+const parseCsvLine = (line: string): string[] => {
+  const out: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+      else if (ch === '"') { inQuotes = false; }
+      else { cur += ch; }
+    } else {
+      if (ch === ',') { out.push(cur); cur = ""; }
+      else if (ch === '"') { inQuotes = true; }
+      else { cur += ch; }
+    }
+  }
+  out.push(cur);
+  return out;
+};
+
+const parsePoliciesCsv = (text: string): {
+  policies: Policy[];
+  timeline: Record<string, TimelineEntry[]>;
+  stakeholders: Record<string, StakeholderEntry[]>;
+} => {
+  const policies: Policy[] = [];
+  const timeline: Record<string, TimelineEntry[]> = {};
+  const stakeholders: Record<string, StakeholderEntry[]> = {};
+  const rawLines = text.split(/\r?\n/);
+  let section: "policies" | "timeline" | "stakeholders" | null = null;
+  let headerSeen = false;
+  for (const raw of rawLines) {
+    const line = raw;
+    if (line.trim() === "") { headerSeen = false; continue; }
+    if (line.startsWith("#")) {
+      const tag = line.replace(/^#\s*/, "").trim().toLowerCase();
+      if (tag.startsWith("polic")) section = "policies";
+      else if (tag.startsWith("timeline")) section = "timeline";
+      else if (tag.startsWith("stakeholder")) section = "stakeholders";
+      else section = null;
+      headerSeen = false;
+      continue;
+    }
+    if (!section) continue;
+    if (!headerSeen) { headerSeen = true; continue; }
+    const cells = parseCsvLine(line);
+    if (section === "policies") {
+      const [name, eco, well, ecol, inter] = cells;
+      if (!name) continue;
+      policies.push({
+        name,
+        economic: Number(eco) || 0,
+        wellbeing: Number(well) || 0,
+        ecological: Number(ecol) || 0,
+        intergenerational: Number(inter) || 0,
+      });
+    } else if (section === "timeline") {
+      const [policy, year, positive, negative, confidence] = cells;
+      if (!policy) continue;
+      const conf = (["high", "medium", "low"].includes(confidence) ? confidence : "medium") as TimelineEntry["confidence"];
+      (timeline[policy] ||= []).push({ year, positive, negative, confidence: conf });
+    } else if (section === "stakeholders") {
+      const [policy, group, benefit, population, detail] = cells;
+      if (!policy) continue;
+      (stakeholders[policy] ||= []).push({ group, benefit: Number(benefit) || 0, population, detail });
+    }
+  }
+  return { policies, timeline, stakeholders };
+};
 
 const INITIAL_POLICIES: Policy[] = [
   { name: "Dam Project", economic: 82, wellbeing: 45, ecological: 25, intergenerational: 60 },
@@ -335,18 +415,22 @@ const Index = () => {
     });
   }, [policies, stakeholderData, timelineData]);
 
-  const handleExportPolicies = useCallback(() => {
+  const handleExportPolicies = useCallback((opts: { timeline: boolean; stakeholders: boolean } = { timeline: true, stakeholders: true }) => {
     const custom = policies.filter((p) => !BUILT_IN_NAMES.has(p.name));
     if (custom.length === 0) {
       toast.error("No custom policies to export");
       return;
     }
-    const exportData = {
+    const exportData: Record<string, unknown> = {
       version: 1,
       policies: custom,
-      timeline: Object.fromEntries(custom.map((p) => [p.name, timelineData[p.name] || []])),
-      stakeholders: Object.fromEntries(custom.map((p) => [p.name, stakeholderData[p.name] || []])),
     };
+    if (opts.timeline) {
+      exportData.timeline = Object.fromEntries(custom.map((p) => [p.name, timelineData[p.name] || []]));
+    }
+    if (opts.stakeholders) {
+      exportData.stakeholders = Object.fromEntries(custom.map((p) => [p.name, stakeholderData[p.name] || []]));
+    }
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
     const link = document.createElement("a");
     link.download = `atlas-policies-${Date.now()}.json`;
@@ -356,7 +440,7 @@ const Index = () => {
     toast.success(`Exported ${custom.length} custom polic${custom.length === 1 ? "y" : "ies"}`);
   }, [policies, timelineData, stakeholderData]);
 
-  const handleExportPoliciesCSV = useCallback(() => {
+  const handleExportPoliciesCSV = useCallback((opts: { timeline: boolean; stakeholders: boolean } = { timeline: true, stakeholders: true }) => {
     const custom = policies.filter((p) => !BUILT_IN_NAMES.has(p.name));
     if (custom.length === 0) {
       toast.error("No custom policies to export");
@@ -373,24 +457,26 @@ const Index = () => {
     custom.forEach((p) => {
       lines.push([p.name, p.economic, p.wellbeing, p.ecological, p.intergenerational].map(escape).join(","));
     });
-    // Section 2: Timeline
-    lines.push("");
-    lines.push("# Timeline");
-    lines.push(["policy", "year", "positive", "negative", "confidence"].join(","));
-    custom.forEach((p) => {
-      (timelineData[p.name] || []).forEach((t) => {
-        lines.push([p.name, t.year, t.positive, t.negative, t.confidence].map(escape).join(","));
+    if (opts.timeline) {
+      lines.push("");
+      lines.push("# Timeline");
+      lines.push(["policy", "year", "positive", "negative", "confidence"].join(","));
+      custom.forEach((p) => {
+        (timelineData[p.name] || []).forEach((t) => {
+          lines.push([p.name, t.year, t.positive, t.negative, t.confidence].map(escape).join(","));
+        });
       });
-    });
-    // Section 3: Stakeholders
-    lines.push("");
-    lines.push("# Stakeholders");
-    lines.push(["policy", "group", "benefit", "population", "detail"].join(","));
-    custom.forEach((p) => {
-      (stakeholderData[p.name] || []).forEach((s) => {
-        lines.push([p.name, s.group, s.benefit, s.population, s.detail].map(escape).join(","));
+    }
+    if (opts.stakeholders) {
+      lines.push("");
+      lines.push("# Stakeholders");
+      lines.push(["policy", "group", "benefit", "population", "detail"].join(","));
+      custom.forEach((p) => {
+        (stakeholderData[p.name] || []).forEach((s) => {
+          lines.push([p.name, s.group, s.benefit, s.population, s.detail].map(escape).join(","));
+        });
       });
-    });
+    }
     const blob = new Blob([lines.join("\n")], { type: "text/csv" });
     const link = document.createElement("a");
     link.download = `atlas-policies-${Date.now()}.csv`;
@@ -416,19 +502,57 @@ const Index = () => {
   }, [pushUndo]);
 
   const [resettingAll, setResettingAll] = useState(false);
+  const [exportOptions, setExportOptions] = useState<{
+    open: boolean;
+    format: "json" | "csv";
+    timeline: boolean;
+    stakeholders: boolean;
+  }>({ open: false, format: "json", timeline: true, stakeholders: true });
+
+  const handleResetPolicyOrder = useCallback(() => {
+    if (!policyOrder) {
+      toast.info("Already using default ranking order");
+      return;
+    }
+    pushUndo();
+    setPolicyOrder(null);
+    localStorage.removeItem("atlas-policy-order");
+    toast.success("Ranking order reset to default");
+  }, [policyOrder, pushUndo]);
+
+  // Ctrl/Cmd + Shift + R: reset manual ranking order to default
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "R" || e.key === "r")) {
+        e.preventDefault();
+        handleResetPolicyOrder();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [handleResetPolicyOrder]);
 
   const handleImportPolicies = useCallback(() => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".json";
+    input.accept = ".json,.csv";
     input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
       const reader = new FileReader();
       reader.onload = (ev) => {
+        const text = ev.target?.result as string;
+        const isCsv = file.name.toLowerCase().endsWith(".csv");
         try {
-          const data = JSON.parse(ev.target?.result as string);
-          if (!data.policies || !Array.isArray(data.policies)) throw new Error("Invalid format");
+          let data: { policies: Policy[]; timeline?: Record<string, TimelineEntry[]>; stakeholders?: Record<string, StakeholderEntry[]> };
+          if (isCsv) {
+            data = parsePoliciesCsv(text);
+          } else {
+            data = JSON.parse(text);
+          }
+          if (!data.policies || !Array.isArray(data.policies) || data.policies.length === 0) {
+            throw new Error("Invalid format");
+          }
           let imported = 0;
           data.policies.forEach((p: Policy) => {
             if (BUILT_IN_NAMES.has(p.name)) return;
@@ -552,11 +676,17 @@ const Index = () => {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="font-mono text-xs">
-                    <DropdownMenuItem onClick={handleExportPolicies} className="text-xs">
-                      Export as JSON
+                    <DropdownMenuItem
+                      onClick={() => setExportOptions((o) => ({ ...o, open: true, format: "json" }))}
+                      className="text-xs"
+                    >
+                      Export as JSON…
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleExportPoliciesCSV} className="text-xs">
-                      Export as CSV
+                    <DropdownMenuItem
+                      onClick={() => setExportOptions((o) => ({ ...o, open: true, format: "csv" }))}
+                      className="text-xs"
+                    >
+                      Export as CSV…
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -571,6 +701,28 @@ const Index = () => {
       <main ref={dashboardRef} className="container max-w-7xl py-8 space-y-8">
         {/* Weighted ranking bar */}
         <motion.div className="rounded-lg border border-border bg-card p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
+          <div className="flex items-center justify-between gap-4 flex-wrap mb-2">
+            <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">
+              Keyboard: <kbd className="px-1 py-0.5 rounded border border-border bg-muted/40 text-foreground/80 mx-0.5">Tab</kbd> to focus ·
+              <kbd className="px-1 py-0.5 rounded border border-border bg-muted/40 text-foreground/80 mx-0.5">←</kbd>
+              <kbd className="px-1 py-0.5 rounded border border-border bg-muted/40 text-foreground/80 mx-0.5">→</kbd> to reorder ·
+              <kbd className="px-1 py-0.5 rounded border border-border bg-muted/40 text-foreground/80 mx-0.5">Ctrl</kbd>+
+              <kbd className="px-1 py-0.5 rounded border border-border bg-muted/40 text-foreground/80 mx-0.5">Shift</kbd>+
+              <kbd className="px-1 py-0.5 rounded border border-border bg-muted/40 text-foreground/80 mx-0.5">R</kbd> to reset order
+            </span>
+            {policyOrder && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleResetPolicyOrder}
+                className="h-6 text-[10px] font-mono text-muted-foreground hover:text-foreground"
+                title="Reset ranking order (Ctrl+Shift+R)"
+              >
+                <RotateCcw className="w-3 h-3 mr-1" />
+                Reset order
+              </Button>
+            )}
+          </div>
           <div className="flex items-center gap-4 flex-wrap">
             <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">Weighted Ranking</span>
             <Reorder.Group
@@ -805,6 +957,50 @@ const Index = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={exportOptions.open} onOpenChange={(open) => setExportOptions((o) => ({ ...o, open }))}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-mono text-sm uppercase tracking-widest">
+              Export as {exportOptions.format.toUpperCase()}
+            </DialogTitle>
+            <DialogDescription className="font-mono text-xs">
+              Choose which sections to include in the exported file. Custom policies are always included.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <Checkbox
+                checked={exportOptions.timeline}
+                onCheckedChange={(v) => setExportOptions((o) => ({ ...o, timeline: !!v }))}
+              />
+              <span className="text-sm font-mono">Include Timeline</span>
+            </label>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <Checkbox
+                checked={exportOptions.stakeholders}
+                onCheckedChange={(v) => setExportOptions((o) => ({ ...o, stakeholders: !!v }))}
+              />
+              <span className="text-sm font-mono">Include Stakeholders</span>
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExportOptions((o) => ({ ...o, open: false }))}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                const opts = { timeline: exportOptions.timeline, stakeholders: exportOptions.stakeholders };
+                if (exportOptions.format === "json") handleExportPolicies(opts);
+                else handleExportPoliciesCSV(opts);
+                setExportOptions((o) => ({ ...o, open: false }));
+              }}
+            >
+              Export
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
