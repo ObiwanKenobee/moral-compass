@@ -520,6 +520,18 @@ const Index = () => {
     toast.success("Ranking order reset to default");
   }, [policyOrder, pushUndo]);
 
+  // Ctrl/Cmd + Shift + R: reset manual ranking order to default
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "R" || e.key === "r")) {
+        e.preventDefault();
+        handleResetPolicyOrder();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [handleResetPolicyOrder]);
+
   const handleImportPolicies = useCallback(() => {
     const input = document.createElement("input");
     input.type = "file";
