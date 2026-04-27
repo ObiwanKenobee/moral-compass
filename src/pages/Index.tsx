@@ -10,6 +10,7 @@ import EthicalWeightSliders from "@/components/atlas/EthicalWeightSliders";
 import UncertaintyPanel from "@/components/atlas/UncertaintyPanel";
 import PolicyCreationForm from "@/components/atlas/PolicyCreationForm";
 import ExportButton from "@/components/atlas/ExportButton";
+import ThemeToggle from "@/components/atlas/ThemeToggle";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -24,6 +25,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 
@@ -349,6 +356,50 @@ const Index = () => {
     toast.success(`Exported ${custom.length} custom polic${custom.length === 1 ? "y" : "ies"}`);
   }, [policies, timelineData, stakeholderData]);
 
+  const handleExportPoliciesCSV = useCallback(() => {
+    const custom = policies.filter((p) => !BUILT_IN_NAMES.has(p.name));
+    if (custom.length === 0) {
+      toast.error("No custom policies to export");
+      return;
+    }
+    const escape = (val: unknown) => {
+      const s = String(val ?? "");
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const lines: string[] = [];
+    // Section 1: Policies
+    lines.push("# Policies");
+    lines.push(["name", "economic", "wellbeing", "ecological", "intergenerational"].join(","));
+    custom.forEach((p) => {
+      lines.push([p.name, p.economic, p.wellbeing, p.ecological, p.intergenerational].map(escape).join(","));
+    });
+    // Section 2: Timeline
+    lines.push("");
+    lines.push("# Timeline");
+    lines.push(["policy", "year", "positive", "negative", "confidence"].join(","));
+    custom.forEach((p) => {
+      (timelineData[p.name] || []).forEach((t) => {
+        lines.push([p.name, t.year, t.positive, t.negative, t.confidence].map(escape).join(","));
+      });
+    });
+    // Section 3: Stakeholders
+    lines.push("");
+    lines.push("# Stakeholders");
+    lines.push(["policy", "group", "benefit", "population", "detail"].join(","));
+    custom.forEach((p) => {
+      (stakeholderData[p.name] || []).forEach((s) => {
+        lines.push([p.name, s.group, s.benefit, s.population, s.detail].map(escape).join(","));
+      });
+    });
+    const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+    const link = document.createElement("a");
+    link.download = `atlas-policies-${Date.now()}.csv`;
+    link.href = URL.createObjectURL(blob);
+    link.click();
+    URL.revokeObjectURL(link.href);
+    toast.success(`Exported ${custom.length} custom polic${custom.length === 1 ? "y" : "ies"} as CSV`);
+  }, [policies, timelineData, stakeholderData]);
+
   const handleResetCustomPolicies = useCallback(() => {
     pushUndo();
     setPolicies([...INITIAL_POLICIES]);
@@ -493,11 +544,24 @@ const Index = () => {
                   <Upload className="w-3 h-3" />
                   Import
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleExportPolicies} className="h-8 text-xs font-mono gap-1.5 border-border">
-                  <Download className="w-3 h-3" />
-                  Export
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8 text-xs font-mono gap-1.5 border-border">
+                      <Download className="w-3 h-3" />
+                      Export
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="font-mono text-xs">
+                    <DropdownMenuItem onClick={handleExportPolicies} className="text-xs">
+                      Export as JSON
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleExportPoliciesCSV} className="text-xs">
+                      Export as CSV
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <ExportButton targetRef={dashboardRef as React.RefObject<HTMLElement>} />
+                <ThemeToggle />
               </div>
             </div>
           </motion.div>

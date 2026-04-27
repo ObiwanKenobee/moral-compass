@@ -61,6 +61,54 @@
     --sidebar-border: 220 15% 18%;
     --sidebar-ring: 38 90% 55%;
   }
+
+  .light {
+    --background: 45 25% 97%;
+    --foreground: 220 20% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 12%;
+
+    --primary: 38 90% 45%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 15% 94%;
+    --secondary-foreground: 220 20% 18%;
+
+    --muted: 220 15% 92%;
+    --muted-foreground: 220 10% 40%;
+
+    --accent: 38 80% 50%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 70% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 15% 86%;
+    --input: 220 15% 86%;
+    --ring: 38 90% 45%;
+
+    --atlas-economic: 38 90% 45%;
+    --atlas-wellbeing: 160 55% 38%;
+    --atlas-ecological: 140 50% 35%;
+    --atlas-intergenerational: 270 45% 50%;
+    --atlas-glow: 38 90% 50%;
+    --atlas-surface: 0 0% 100%;
+    --atlas-surface-elevated: 220 15% 96%;
+    --atlas-grid: 220 15% 88%;
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 220 20% 12%;
+    --sidebar-primary: 38 90% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 15% 94%;
+    --sidebar-accent-foreground: 220 20% 18%;
+    --sidebar-border: 220 15% 86%;
+    --sidebar-ring: 38 90% 45%;
+  }
 }
 
 @layer base {
