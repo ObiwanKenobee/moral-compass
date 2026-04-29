@@ -702,13 +702,16 @@ const Index = () => {
         {/* Weighted ranking bar */}
         <motion.div className="rounded-lg border border-border bg-card p-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
           <div className="flex items-center justify-between gap-4 flex-wrap mb-2">
-            <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">
+            <span id="ranking-keyboard-hint-visual" aria-hidden="true" className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">
               Keyboard: <kbd className="px-1 py-0.5 rounded border border-border bg-muted/40 text-foreground/80 mx-0.5">Tab</kbd> to focus ·
               <kbd className="px-1 py-0.5 rounded border border-border bg-muted/40 text-foreground/80 mx-0.5">←</kbd>
               <kbd className="px-1 py-0.5 rounded border border-border bg-muted/40 text-foreground/80 mx-0.5">→</kbd> to reorder ·
               <kbd className="px-1 py-0.5 rounded border border-border bg-muted/40 text-foreground/80 mx-0.5">Ctrl</kbd>+
               <kbd className="px-1 py-0.5 rounded border border-border bg-muted/40 text-foreground/80 mx-0.5">Shift</kbd>+
               <kbd className="px-1 py-0.5 rounded border border-border bg-muted/40 text-foreground/80 mx-0.5">R</kbd> to reset order
+            </span>
+            <span id="ranking-keyboard-hint" className="sr-only">
+              Weighted ranking bar. Press Tab to focus a policy, then use the Left or Right arrow keys to reorder it. Press Control plus Shift plus R to reset the manual order back to the default built-in sorting.
             </span>
             {policyOrder && (
               <Button
@@ -730,6 +733,9 @@ const Index = () => {
               values={weightedPolicies}
               onReorder={handleReorder}
               className="flex items-center gap-4 flex-wrap"
+              role="list"
+              aria-label="Weighted policy ranking"
+              aria-describedby="ranking-keyboard-hint"
             >
               {weightedPolicies.map((p, i) => (
                 <Reorder.Item
