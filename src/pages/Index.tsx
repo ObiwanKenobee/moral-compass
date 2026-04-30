@@ -890,6 +890,29 @@ const Index = () => {
         </AlertDialogContent>
       </AlertDialog>
 
+      <AlertDialog open={confirmResetOrder} onOpenChange={setConfirmResetOrder}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset ranking order?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This clears your manual policy ordering and restores the default
+              score-based ranking. You can undo this with Ctrl+Z.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                performResetPolicyOrder();
+                setConfirmResetOrder(false);
+              }}
+            >
+              Reset order
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <Dialog open={exportOptions.open} onOpenChange={(open) => setExportOptions((o) => ({ ...o, open }))}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
