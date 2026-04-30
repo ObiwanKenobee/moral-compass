@@ -42,6 +42,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  buildJsonExport,
+  buildCsvExport,
+  parsePoliciesCsv,
+} from "@/lib/policyIO";
 
 interface Policy {
   name: string;
@@ -66,77 +71,6 @@ interface StakeholderEntry {
 }
 
 const BUILT_IN_NAMES = new Set(["Dam Project", "Wetland Restore", "Solar Grid"]);
-
-// Parse a CSV line respecting quoted fields with embedded commas / escaped quotes.
-const parseCsvLine = (line: string): string[] => {
-  const out: string[] = [];
-  let cur = "";
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (inQuotes) {
-      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
-      else if (ch === '"') { inQuotes = false; }
-      else { cur += ch; }
-    } else {
-      if (ch === ',') { out.push(cur); cur = ""; }
-      else if (ch === '"') { inQuotes = true; }
-      else { cur += ch; }
-    }
-  }
-  out.push(cur);
-  return out;
-};
-
-const parsePoliciesCsv = (text: string): {
-  policies: Policy[];
-  timeline: Record<string, TimelineEntry[]>;
-  stakeholders: Record<string, StakeholderEntry[]>;
-} => {
-  const policies: Policy[] = [];
-  const timeline: Record<string, TimelineEntry[]> = {};
-  const stakeholders: Record<string, StakeholderEntry[]> = {};
-  const rawLines = text.split(/\r?\n/);
-  let section: "policies" | "timeline" | "stakeholders" | null = null;
-  let headerSeen = false;
-  for (const raw of rawLines) {
-    const line = raw;
-    if (line.trim() === "") { headerSeen = false; continue; }
-    if (line.startsWith("#")) {
-      const tag = line.replace(/^#\s*/, "").trim().toLowerCase();
-      if (tag.startsWith("polic")) section = "policies";
-      else if (tag.startsWith("timeline")) section = "timeline";
-      else if (tag.startsWith("stakeholder")) section = "stakeholders";
-      else section = null;
-      headerSeen = false;
-      continue;
-    }
-    if (!section) continue;
-    if (!headerSeen) { headerSeen = true; continue; }
-    const cells = parseCsvLine(line);
-    if (section === "policies") {
-      const [name, eco, well, ecol, inter] = cells;
-      if (!name) continue;
-      policies.push({
-        name,
-        economic: Number(eco) || 0,
-        wellbeing: Number(well) || 0,
-        ecological: Number(ecol) || 0,
-        intergenerational: Number(inter) || 0,
-      });
-    } else if (section === "timeline") {
-      const [policy, year, positive, negative, confidence] = cells;
-      if (!policy) continue;
-      const conf = (["high", "medium", "low"].includes(confidence) ? confidence : "medium") as TimelineEntry["confidence"];
-      (timeline[policy] ||= []).push({ year, positive, negative, confidence: conf });
-    } else if (section === "stakeholders") {
-      const [policy, group, benefit, population, detail] = cells;
-      if (!policy) continue;
-      (stakeholders[policy] ||= []).push({ group, benefit: Number(benefit) || 0, population, detail });
-    }
-  }
-  return { policies, timeline, stakeholders };
-};
 
 const INITIAL_POLICIES: Policy[] = [
   { name: "Dam Project", economic: 82, wellbeing: 45, ecological: 25, intergenerational: 60 },
@@ -421,17 +355,11 @@ const Index = () => {
       toast.error("No custom policies to export");
       return;
     }
-    const exportData: Record<string, unknown> = {
-      version: 1,
-      policies: custom,
-    };
-    if (opts.timeline) {
-      exportData.timeline = Object.fromEntries(custom.map((p) => [p.name, timelineData[p.name] || []]));
-    }
-    if (opts.stakeholders) {
-      exportData.stakeholders = Object.fromEntries(custom.map((p) => [p.name, stakeholderData[p.name] || []]));
-    }
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+    const text = buildJsonExport(
+      { policies: custom, timeline: timelineData, stakeholders: stakeholderData },
+      opts,
+    );
+    const blob = new Blob([text], { type: "application/json" });
     const link = document.createElement("a");
     link.download = `atlas-policies-${Date.now()}.json`;
     link.href = URL.createObjectURL(blob);
@@ -446,38 +374,11 @@ const Index = () => {
       toast.error("No custom policies to export");
       return;
     }
-    const escape = (val: unknown) => {
-      const s = String(val ?? "");
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
-    const lines: string[] = [];
-    // Section 1: Policies
-    lines.push("# Policies");
-    lines.push(["name", "economic", "wellbeing", "ecological", "intergenerational"].join(","));
-    custom.forEach((p) => {
-      lines.push([p.name, p.economic, p.wellbeing, p.ecological, p.intergenerational].map(escape).join(","));
-    });
-    if (opts.timeline) {
-      lines.push("");
-      lines.push("# Timeline");
-      lines.push(["policy", "year", "positive", "negative", "confidence"].join(","));
-      custom.forEach((p) => {
-        (timelineData[p.name] || []).forEach((t) => {
-          lines.push([p.name, t.year, t.positive, t.negative, t.confidence].map(escape).join(","));
-        });
-      });
-    }
-    if (opts.stakeholders) {
-      lines.push("");
-      lines.push("# Stakeholders");
-      lines.push(["policy", "group", "benefit", "population", "detail"].join(","));
-      custom.forEach((p) => {
-        (stakeholderData[p.name] || []).forEach((s) => {
-          lines.push([p.name, s.group, s.benefit, s.population, s.detail].map(escape).join(","));
-        });
-      });
-    }
-    const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+    const text = buildCsvExport(
+      { policies: custom, timeline: timelineData, stakeholders: stakeholderData },
+      opts,
+    );
+    const blob = new Blob([text], { type: "text/csv" });
     const link = document.createElement("a");
     link.download = `atlas-policies-${Date.now()}.csv`;
     link.href = URL.createObjectURL(blob);
@@ -502,6 +403,7 @@ const Index = () => {
   }, [pushUndo]);
 
   const [resettingAll, setResettingAll] = useState(false);
+  const [confirmResetOrder, setConfirmResetOrder] = useState(false);
   const [exportOptions, setExportOptions] = useState<{
     open: boolean;
     format: "json" | "csv";
@@ -509,16 +411,22 @@ const Index = () => {
     stakeholders: boolean;
   }>({ open: false, format: "json", timeline: true, stakeholders: true });
 
+  const performResetPolicyOrder = useCallback(() => {
+    pushUndo();
+    setPolicyOrder(null);
+    localStorage.removeItem("atlas-policy-order");
+    toast.success("Ranking order reset to default");
+  }, [pushUndo]);
+
+  // Public entry point — opens an accessible confirmation dialog instead of
+  // resetting immediately so destructive keyboard shortcuts can't surprise users.
   const handleResetPolicyOrder = useCallback(() => {
     if (!policyOrder) {
       toast.info("Already using default ranking order");
       return;
     }
-    pushUndo();
-    setPolicyOrder(null);
-    localStorage.removeItem("atlas-policy-order");
-    toast.success("Ranking order reset to default");
-  }, [policyOrder, pushUndo]);
+    setConfirmResetOrder(true);
+  }, [policyOrder]);
 
   // Ctrl/Cmd + Shift + R: reset manual ranking order to default
   useEffect(() => {
@@ -544,14 +452,26 @@ const Index = () => {
         const text = ev.target?.result as string;
         const isCsv = file.name.toLowerCase().endsWith(".csv");
         try {
-          let data: { policies: Policy[]; timeline?: Record<string, TimelineEntry[]>; stakeholders?: Record<string, StakeholderEntry[]> };
+          let data: {
+            policies: Policy[];
+            timeline?: Record<string, TimelineEntry[]>;
+            stakeholders?: Record<string, StakeholderEntry[]>;
+          };
+          let errors: string[] = [];
           if (isCsv) {
-            data = parsePoliciesCsv(text);
+            const parsed = parsePoliciesCsv(text);
+            data = { policies: parsed.policies, timeline: parsed.timeline, stakeholders: parsed.stakeholders };
+            errors = parsed.errors;
           } else {
             data = JSON.parse(text);
           }
           if (!data.policies || !Array.isArray(data.policies) || data.policies.length === 0) {
-            throw new Error("Invalid format");
+            if (errors.length) {
+              toast.error(`Import failed: ${errors[0]}${errors.length > 1 ? ` (+${errors.length - 1} more)` : ""}`);
+            } else {
+              toast.error("Failed to parse policy file: no valid policies found");
+            }
+            return;
           }
           let imported = 0;
           data.policies.forEach((p: Policy) => {
@@ -561,11 +481,17 @@ const Index = () => {
               if (exists >= 0) { const u = [...prev]; u[exists] = p; return u; }
               return [...prev, p];
             });
-            if (data.timeline?.[p.name]) setTimelineData((prev) => ({ ...prev, [p.name]: data.timeline[p.name] }));
-            if (data.stakeholders?.[p.name]) setStakeholderData((prev) => ({ ...prev, [p.name]: data.stakeholders[p.name] }));
+            if (data.timeline?.[p.name]) setTimelineData((prev) => ({ ...prev, [p.name]: data.timeline![p.name] }));
+            if (data.stakeholders?.[p.name]) setStakeholderData((prev) => ({ ...prev, [p.name]: data.stakeholders![p.name] }));
             imported++;
           });
-          toast.success(`Imported ${imported} polic${imported === 1 ? "y" : "ies"}`);
+          if (errors.length) {
+            toast.warning(
+              `Imported ${imported} polic${imported === 1 ? "y" : "ies"}, skipped ${errors.length} invalid row${errors.length === 1 ? "" : "s"}: ${errors[0]}`,
+            );
+          } else {
+            toast.success(`Imported ${imported} polic${imported === 1 ? "y" : "ies"}`);
+          }
         } catch {
           toast.error("Failed to parse policy file");
         }
@@ -960,6 +886,29 @@ const Index = () => {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleResetCustomPolicies}>Reset All</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmResetOrder} onOpenChange={setConfirmResetOrder}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset ranking order?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This clears your manual policy ordering and restores the default
+              score-based ranking. You can undo this with Ctrl+Z.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                performResetPolicyOrder();
+                setConfirmResetOrder(false);
+              }}
+            >
+              Reset order
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
