@@ -315,6 +315,14 @@ const Index = () => {
       });
       setTimelineData((prev) => ({ ...prev, [policy.name]: timeline }));
       setStakeholderData((prev) => ({ ...prev, [policy.name]: stakeholders }));
+      setPolicyMeta((prev) => ({
+        ...prev,
+        [policy.name]: {
+          source: "manual",
+          timestamp: Date.now(),
+          validatedFields: ["name", "economic", "wellbeing", "ecological", "intergenerational"],
+        },
+      }));
       setEditingPolicy(null);
     },
     [pushUndo]
@@ -498,46 +506,47 @@ const Index = () => {
         const text = ev.target?.result as string;
         const isCsv = file.name.toLowerCase().endsWith(".csv");
         try {
-          let data: {
-            policies: Policy[];
-            timeline?: Record<string, TimelineEntry[]>;
-            stakeholders?: Record<string, StakeholderEntry[]>;
-          };
+          let policiesArr: Policy[] = [];
+          let timeline: Record<string, TimelineEntry[]> = {};
+          let stakeholders: Record<string, StakeholderEntry[]> = {};
           let errors: string[] = [];
           if (isCsv) {
             const parsed = parsePoliciesCsv(text);
-            data = { policies: parsed.policies, timeline: parsed.timeline, stakeholders: parsed.stakeholders };
+            policiesArr = parsed.policies;
+            timeline = parsed.timeline;
+            stakeholders = parsed.stakeholders;
             errors = parsed.errors;
           } else {
-            data = JSON.parse(text);
+            const data = JSON.parse(text);
+            policiesArr = Array.isArray(data.policies) ? data.policies : [];
+            timeline = data.timeline || {};
+            stakeholders = data.stakeholders || {};
           }
-          if (!data.policies || !Array.isArray(data.policies) || data.policies.length === 0) {
-            if (errors.length) {
-              toast.error(`Import failed: ${errors[0]}${errors.length > 1 ? ` (+${errors.length - 1} more)` : ""}`);
-            } else {
-              toast.error("Failed to parse policy file: no valid policies found");
-            }
+          if (policiesArr.length === 0 && Object.keys(timeline).length === 0 && Object.keys(stakeholders).length === 0) {
+            toast.error(errors[0] || "Failed to parse policy file: no valid data found");
             return;
           }
-          let imported = 0;
-          data.policies.forEach((p: Policy) => {
-            if (BUILT_IN_NAMES.has(p.name)) return;
-            setPolicies((prev) => {
-              const exists = prev.findIndex((x) => x.name === p.name);
-              if (exists >= 0) { const u = [...prev]; u[exists] = p; return u; }
-              return [...prev, p];
-            });
-            if (data.timeline?.[p.name]) setTimelineData((prev) => ({ ...prev, [p.name]: data.timeline![p.name] }));
-            if (data.stakeholders?.[p.name]) setStakeholderData((prev) => ({ ...prev, [p.name]: data.stakeholders![p.name] }));
-            imported++;
+          // Build initial mapping: orphan rows -> "__discard__"
+          const incomingNames = new Set(policiesArr.map((p) => p.name));
+          const tlMap: Record<string, string> = {};
+          Object.keys(timeline).forEach((k) => {
+            if (!incomingNames.has(k)) tlMap[k] = "__discard__";
           });
-          if (errors.length) {
-            toast.warning(
-              `Imported ${imported} polic${imported === 1 ? "y" : "ies"}, skipped ${errors.length} invalid row${errors.length === 1 ? "" : "s"}: ${errors[0]}`,
-            );
-          } else {
-            toast.success(`Imported ${imported} polic${imported === 1 ? "y" : "ies"}`);
-          }
+          const shMap: Record<string, string> = {};
+          Object.keys(stakeholders).forEach((k) => {
+            if (!incomingNames.has(k)) shMap[k] = "__discard__";
+          });
+          setImportPreview({
+            open: true,
+            source: isCsv ? "csv" : "json",
+            fileName: file.name,
+            policies: policiesArr,
+            timeline,
+            stakeholders,
+            errors,
+            timelineMap: tlMap,
+            stakeholderMap: shMap,
+          });
         } catch {
           toast.error("Failed to parse policy file");
         }
@@ -546,6 +555,46 @@ const Index = () => {
     };
     input.click();
   }, []);
+
+  const applyImportPreview = useCallback(() => {
+    if (!importPreview) return;
+    pushUndo();
+    const { policies: incoming, timeline, stakeholders, source, timelineMap, stakeholderMap } = importPreview;
+    const incomingNames = new Set(incoming.map((p) => p.name));
+    const validated = ["name", "economic", "wellbeing", "ecological", "intergenerational"];
+    let imported = 0;
+
+    incoming.forEach((p) => {
+      if (BUILT_IN_NAMES.has(p.name)) return;
+      setPolicies((prev) => {
+        const exists = prev.findIndex((x) => x.name === p.name);
+        if (exists >= 0) { const u = [...prev]; u[exists] = p; return u; }
+        return [...prev, p];
+      });
+      setPolicyMeta((prev) => ({
+        ...prev,
+        [p.name]: { source, timestamp: Date.now(), validatedFields: validated },
+      }));
+      imported++;
+    });
+
+    // Apply timeline rows with mapping
+    Object.entries(timeline).forEach(([orig, rows]) => {
+      const target = incomingNames.has(orig) ? orig : timelineMap[orig];
+      if (!target || target === "__discard__") return;
+      if (BUILT_IN_NAMES.has(target)) return;
+      setTimelineData((prev) => ({ ...prev, [target]: rows }));
+    });
+    Object.entries(stakeholders).forEach(([orig, rows]) => {
+      const target = incomingNames.has(orig) ? orig : stakeholderMap[orig];
+      if (!target || target === "__discard__") return;
+      if (BUILT_IN_NAMES.has(target)) return;
+      setStakeholderData((prev) => ({ ...prev, [target]: rows }));
+    });
+
+    toast.success(`Imported ${imported} polic${imported === 1 ? "y" : "ies"}`);
+    setImportPreview(null);
+  }, [importPreview, pushUndo]);
 
   const scoredPolicies = useMemo(
     () =>
