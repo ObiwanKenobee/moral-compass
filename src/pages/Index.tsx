@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence, Reorder } from "framer-motion";
-import { Pencil, Trash2, Copy, Upload, Download, RotateCcw, GripVertical, Undo2, Redo2 } from "lucide-react";
+import { Pencil, Trash2, Copy, Upload, Download, RotateCcw, GripVertical, Undo2, Redo2, FileText, Info, ShieldCheck } from "lucide-react";
 import MoralCompass from "@/components/atlas/MoralCompass";
 import EthicalLensRadar from "@/components/atlas/EthicalLensRadar";
 import TradeoffSurface from "@/components/atlas/TradeoffSurface";
@@ -42,10 +42,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   buildJsonExport,
   buildCsvExport,
   parsePoliciesCsv,
+  CSV_TEMPLATE,
+  sha256Hex,
 } from "@/lib/policyIO";
 
 interface Policy {
@@ -134,7 +137,14 @@ const LS_KEYS = {
   policies: "atlas-custom-policies",
   timeline: "atlas-custom-timeline",
   stakeholders: "atlas-custom-stakeholders",
+  meta: "atlas-policy-meta",
 };
+
+interface PolicyMeta {
+  source: "csv" | "json" | "manual";
+  timestamp: number;
+  validatedFields: string[];
+}
 
 function loadCustomData() {
   try {
@@ -162,6 +172,14 @@ const Index = () => {
     const { customStakeholders } = loadCustomData();
     return { ...INITIAL_STAKEHOLDERS, ...customStakeholders };
   });
+
+  const [policyMeta, setPolicyMeta] = useState<Record<string, PolicyMeta>>(() => {
+    try { return JSON.parse(localStorage.getItem(LS_KEYS.meta) || "{}"); }
+    catch { return {}; }
+  });
+  useEffect(() => {
+    localStorage.setItem(LS_KEYS.meta, JSON.stringify(policyMeta));
+  }, [policyMeta]);
 
   // Persist custom policies to localStorage
   useEffect(() => {
@@ -297,6 +315,14 @@ const Index = () => {
       });
       setTimelineData((prev) => ({ ...prev, [policy.name]: timeline }));
       setStakeholderData((prev) => ({ ...prev, [policy.name]: stakeholders }));
+      setPolicyMeta((prev) => ({
+        ...prev,
+        [policy.name]: {
+          source: "manual",
+          timestamp: Date.now(),
+          validatedFields: ["name", "economic", "wellbeing", "ecological", "intergenerational"],
+        },
+      }));
       setEditingPolicy(null);
     },
     [pushUndo]
@@ -316,6 +342,11 @@ const Index = () => {
       return next;
     });
     setStakeholderData((prev) => {
+      const next = { ...prev };
+      delete next[deletingPolicy];
+      return next;
+    });
+    setPolicyMeta((prev) => {
       const next = { ...prev };
       delete next[deletingPolicy];
       return next;
@@ -392,12 +423,14 @@ const Index = () => {
     setPolicies([...INITIAL_POLICIES]);
     setTimelineData({ ...INITIAL_TIMELINE });
     setStakeholderData({ ...INITIAL_STAKEHOLDERS });
+    setPolicyMeta({});
     setEditingPolicy(null);
     setDeletingPolicy(null);
     setPolicyOrder(null);
     localStorage.removeItem(LS_KEYS.policies);
     localStorage.removeItem(LS_KEYS.timeline);
     localStorage.removeItem(LS_KEYS.stakeholders);
+    localStorage.removeItem(LS_KEYS.meta);
     localStorage.removeItem("atlas-policy-order");
     toast.success("All custom policies cleared");
   }, [pushUndo]);
@@ -410,6 +443,51 @@ const Index = () => {
     timeline: boolean;
     stakeholders: boolean;
   }>({ open: false, format: "json", timeline: true, stakeholders: true });
+
+  const [exportChecksum, setExportChecksum] = useState<string>("");
+  const [exportPreviewText, setExportPreviewText] = useState<string>("");
+
+  // ---- Import preview state ----
+  interface ImportPreviewState {
+    open: boolean;
+    source: "csv" | "json";
+    fileName: string;
+    policies: Policy[];
+    timeline: Record<string, TimelineEntry[]>;
+    stakeholders: Record<string, StakeholderEntry[]>;
+    errors: string[];
+    // Per-orphan-row mapping: original policy name -> target policy name (or "__discard__")
+    timelineMap: Record<string, string>;
+    stakeholderMap: Record<string, string>;
+  }
+  const [importPreview, setImportPreview] = useState<ImportPreviewState | null>(null);
+
+  const downloadCsvTemplate = useCallback(() => {
+    const blob = new Blob([CSV_TEMPLATE], { type: "text/csv" });
+    const link = document.createElement("a");
+    link.download = "atlas-policy-template.csv";
+    link.href = URL.createObjectURL(blob);
+    link.click();
+    URL.revokeObjectURL(link.href);
+    toast.success("CSV template downloaded");
+  }, []);
+
+  // Recompute the export preview + SHA-256 checksum whenever the user changes
+  // export options, so the dialog can show a stable hash that will match the
+  // downloaded file (and is identical across themes).
+  useEffect(() => {
+    if (!exportOptions.open) return;
+    const custom = policies.filter((p) => !BUILT_IN_NAMES.has(p.name));
+    const opts = { timeline: exportOptions.timeline, stakeholders: exportOptions.stakeholders };
+    const text = exportOptions.format === "json"
+      ? buildJsonExport({ policies: custom, timeline: timelineData, stakeholders: stakeholderData }, opts)
+      : buildCsvExport({ policies: custom, timeline: timelineData, stakeholders: stakeholderData }, opts);
+    setExportPreviewText(text);
+    setExportChecksum("");
+    let cancelled = false;
+    sha256Hex(text).then((h) => { if (!cancelled) setExportChecksum(h); });
+    return () => { cancelled = true; };
+  }, [exportOptions, policies, timelineData, stakeholderData]);
 
   const performResetPolicyOrder = useCallback(() => {
     pushUndo();
@@ -452,46 +530,47 @@ const Index = () => {
         const text = ev.target?.result as string;
         const isCsv = file.name.toLowerCase().endsWith(".csv");
         try {
-          let data: {
-            policies: Policy[];
-            timeline?: Record<string, TimelineEntry[]>;
-            stakeholders?: Record<string, StakeholderEntry[]>;
-          };
+          let policiesArr: Policy[] = [];
+          let timeline: Record<string, TimelineEntry[]> = {};
+          let stakeholders: Record<string, StakeholderEntry[]> = {};
           let errors: string[] = [];
           if (isCsv) {
             const parsed = parsePoliciesCsv(text);
-            data = { policies: parsed.policies, timeline: parsed.timeline, stakeholders: parsed.stakeholders };
+            policiesArr = parsed.policies;
+            timeline = parsed.timeline;
+            stakeholders = parsed.stakeholders;
             errors = parsed.errors;
           } else {
-            data = JSON.parse(text);
+            const data = JSON.parse(text);
+            policiesArr = Array.isArray(data.policies) ? data.policies : [];
+            timeline = data.timeline || {};
+            stakeholders = data.stakeholders || {};
           }
-          if (!data.policies || !Array.isArray(data.policies) || data.policies.length === 0) {
-            if (errors.length) {
-              toast.error(`Import failed: ${errors[0]}${errors.length > 1 ? ` (+${errors.length - 1} more)` : ""}`);
-            } else {
-              toast.error("Failed to parse policy file: no valid policies found");
-            }
+          if (policiesArr.length === 0 && Object.keys(timeline).length === 0 && Object.keys(stakeholders).length === 0) {
+            toast.error(errors[0] || "Failed to parse policy file: no valid data found");
             return;
           }
-          let imported = 0;
-          data.policies.forEach((p: Policy) => {
-            if (BUILT_IN_NAMES.has(p.name)) return;
-            setPolicies((prev) => {
-              const exists = prev.findIndex((x) => x.name === p.name);
-              if (exists >= 0) { const u = [...prev]; u[exists] = p; return u; }
-              return [...prev, p];
-            });
-            if (data.timeline?.[p.name]) setTimelineData((prev) => ({ ...prev, [p.name]: data.timeline![p.name] }));
-            if (data.stakeholders?.[p.name]) setStakeholderData((prev) => ({ ...prev, [p.name]: data.stakeholders![p.name] }));
-            imported++;
+          // Build initial mapping: orphan rows -> "__discard__"
+          const incomingNames = new Set(policiesArr.map((p) => p.name));
+          const tlMap: Record<string, string> = {};
+          Object.keys(timeline).forEach((k) => {
+            if (!incomingNames.has(k)) tlMap[k] = "__discard__";
           });
-          if (errors.length) {
-            toast.warning(
-              `Imported ${imported} polic${imported === 1 ? "y" : "ies"}, skipped ${errors.length} invalid row${errors.length === 1 ? "" : "s"}: ${errors[0]}`,
-            );
-          } else {
-            toast.success(`Imported ${imported} polic${imported === 1 ? "y" : "ies"}`);
-          }
+          const shMap: Record<string, string> = {};
+          Object.keys(stakeholders).forEach((k) => {
+            if (!incomingNames.has(k)) shMap[k] = "__discard__";
+          });
+          setImportPreview({
+            open: true,
+            source: isCsv ? "csv" : "json",
+            fileName: file.name,
+            policies: policiesArr,
+            timeline,
+            stakeholders,
+            errors,
+            timelineMap: tlMap,
+            stakeholderMap: shMap,
+          });
         } catch {
           toast.error("Failed to parse policy file");
         }
@@ -500,6 +579,46 @@ const Index = () => {
     };
     input.click();
   }, []);
+
+  const applyImportPreview = useCallback(() => {
+    if (!importPreview) return;
+    pushUndo();
+    const { policies: incoming, timeline, stakeholders, source, timelineMap, stakeholderMap } = importPreview;
+    const incomingNames = new Set(incoming.map((p) => p.name));
+    const validated = ["name", "economic", "wellbeing", "ecological", "intergenerational"];
+    let imported = 0;
+
+    incoming.forEach((p) => {
+      if (BUILT_IN_NAMES.has(p.name)) return;
+      setPolicies((prev) => {
+        const exists = prev.findIndex((x) => x.name === p.name);
+        if (exists >= 0) { const u = [...prev]; u[exists] = p; return u; }
+        return [...prev, p];
+      });
+      setPolicyMeta((prev) => ({
+        ...prev,
+        [p.name]: { source, timestamp: Date.now(), validatedFields: validated },
+      }));
+      imported++;
+    });
+
+    // Apply timeline rows with mapping
+    Object.entries(timeline).forEach(([orig, rows]) => {
+      const target = incomingNames.has(orig) ? orig : timelineMap[orig];
+      if (!target || target === "__discard__") return;
+      if (BUILT_IN_NAMES.has(target)) return;
+      setTimelineData((prev) => ({ ...prev, [target]: rows }));
+    });
+    Object.entries(stakeholders).forEach(([orig, rows]) => {
+      const target = incomingNames.has(orig) ? orig : stakeholderMap[orig];
+      if (!target || target === "__discard__") return;
+      if (BUILT_IN_NAMES.has(target)) return;
+      setStakeholderData((prev) => ({ ...prev, [target]: rows }));
+    });
+
+    toast.success(`Imported ${imported} polic${imported === 1 ? "y" : "ies"}`);
+    setImportPreview(null);
+  }, [importPreview, pushUndo]);
 
   const scoredPolicies = useMemo(
     () =>
@@ -594,6 +713,16 @@ const Index = () => {
                   <Upload className="w-3 h-3" />
                   Import
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={downloadCsvTemplate}
+                  className="h-8 text-xs font-mono gap-1.5 border-border"
+                  title="Download a CSV template with the expected columns"
+                >
+                  <FileText className="w-3 h-3" />
+                  Template
+                </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="sm" className="h-8 text-xs font-mono gap-1.5 border-border">
@@ -678,7 +807,35 @@ const Index = () => {
                   <span className="text-xs font-mono text-muted-foreground">{i + 1}.</span>
                   <span className="text-sm font-mono text-foreground">{p.name}</span>
                   {!BUILT_IN_NAMES.has(p.name) && (
-                    <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4 font-mono">Custom</Badge>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          className="focus:outline-none focus:ring-2 focus:ring-ring rounded-full"
+                          aria-label={`Custom policy details for ${p.name}`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4 font-mono gap-1 cursor-pointer hover:bg-secondary/80">
+                            Custom
+                            <Info className="w-2.5 h-2.5" />
+                          </Badge>
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72 font-mono text-xs space-y-2">
+                        <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Custom Policy</div>
+                        <div><span className="text-muted-foreground">Source:</span> {(policyMeta[p.name]?.source || "manual").toUpperCase()}</div>
+                        <div><span className="text-muted-foreground">Imported:</span> {policyMeta[p.name]?.timestamp ? new Date(policyMeta[p.name].timestamp).toLocaleString() : "—"}</div>
+                        <div>
+                          <span className="text-muted-foreground">Validated fields:</span>
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {(policyMeta[p.name]?.validatedFields || []).map((f) => (
+                              <Badge key={f} variant="outline" className="text-[9px] px-1.5 py-0 h-4">{f}</Badge>
+                            ))}
+                            {!policyMeta[p.name]?.validatedFields?.length && <span className="text-muted-foreground">—</span>}
+                          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                   )}
                   <motion.span
                     className="text-xs font-mono text-primary"
@@ -939,9 +1096,33 @@ const Index = () => {
               <span className="text-sm font-mono">Include Stakeholders</span>
             </label>
           </div>
+          <div className="rounded-md border border-border bg-muted/20 px-3 py-2 space-y-1">
+            <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+              <ShieldCheck className="w-3 h-3" />
+              SHA-256 checksum
+            </div>
+            <div className="font-mono text-[10px] break-all text-foreground/80 select-all">
+              {exportChecksum || "Computing…"}
+            </div>
+            <div className="text-[9px] font-mono text-muted-foreground">
+              Identical files (regardless of theme) produce the same hash. Re-export and compare to verify.
+            </div>
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setExportOptions((o) => ({ ...o, open: false }))}>
               Cancel
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (!exportChecksum) return;
+                navigator.clipboard.writeText(exportChecksum).then(
+                  () => toast.success("Checksum copied"),
+                  () => toast.error("Copy failed"),
+                );
+              }}
+            >
+              Copy hash
             </Button>
             <Button
               onClick={() => {
@@ -952,6 +1133,143 @@ const Index = () => {
               }}
             >
               Export
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import preview dialog: shows count, validation errors, and lets the
+          user map orphan timeline/stakeholder rows to existing policies before
+          applying the import. */}
+      <Dialog
+        open={!!importPreview?.open}
+        onOpenChange={(open) => !open && setImportPreview(null)}
+      >
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-mono text-sm uppercase tracking-widest">
+              Import preview {importPreview ? `· ${importPreview.source.toUpperCase()}` : ""}
+            </DialogTitle>
+            <DialogDescription className="font-mono text-xs">
+              {importPreview?.fileName} — review what will be imported before applying.
+            </DialogDescription>
+          </DialogHeader>
+          {importPreview && (() => {
+            const incomingNames = new Set(importPreview.policies.map((p) => p.name));
+            const importable = importPreview.policies.filter((p) => !BUILT_IN_NAMES.has(p.name));
+            const skippedBuiltIn = importPreview.policies.length - importable.length;
+            const orphanTimeline = Object.keys(importPreview.timeline).filter((k) => !incomingNames.has(k));
+            const orphanStakeholders = Object.keys(importPreview.stakeholders).filter((k) => !incomingNames.has(k));
+            const targetCandidates = [
+              ...importPreview.policies.map((p) => p.name).filter((n) => !BUILT_IN_NAMES.has(n)),
+              ...policies.map((p) => p.name).filter((n) => !BUILT_IN_NAMES.has(n)),
+            ];
+            const uniqueTargets = Array.from(new Set(targetCandidates));
+            return (
+              <div className="space-y-4 py-2">
+                <div className="grid grid-cols-3 gap-2 font-mono text-xs">
+                  <div className="rounded border border-border p-2">
+                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Will import</div>
+                    <div className="text-lg text-primary">{importable.length}</div>
+                  </div>
+                  <div className="rounded border border-border p-2">
+                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Skipped (built-in)</div>
+                    <div className="text-lg">{skippedBuiltIn}</div>
+                  </div>
+                  <div className="rounded border border-border p-2">
+                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Errors</div>
+                    <div className={`text-lg ${importPreview.errors.length ? "text-destructive" : ""}`}>{importPreview.errors.length}</div>
+                  </div>
+                </div>
+
+                {importable.length > 0 && (
+                  <div>
+                    <div className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Policies</div>
+                    <ul className="text-xs font-mono space-y-0.5 max-h-32 overflow-y-auto">
+                      {importable.map((p) => (
+                        <li key={p.name} className="flex items-center justify-between border-b border-border/40 py-1">
+                          <span>{p.name}</span>
+                          <span className="text-muted-foreground text-[10px]">
+                            E{p.economic} · W{p.wellbeing} · Ec{p.ecological} · I{p.intergenerational}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {importPreview.errors.length > 0 && (
+                  <div>
+                    <div className="text-[10px] font-mono uppercase tracking-widest text-destructive mb-1">Validation errors</div>
+                    <ul className="text-xs font-mono space-y-0.5 max-h-32 overflow-y-auto text-destructive/90">
+                      {importPreview.errors.map((er, i) => (
+                        <li key={i}>• {er}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {(orphanTimeline.length > 0 || orphanStakeholders.length > 0) && (
+                  <div className="rounded border border-amber-500/40 bg-amber-500/5 p-3 space-y-3">
+                    <div className="text-[10px] font-mono uppercase tracking-widest text-amber-600 dark:text-amber-400">
+                      Unmatched rows — choose a target or discard
+                    </div>
+                    {orphanTimeline.map((orig) => (
+                      <div key={`tl-${orig}`} className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-mono">
+                          Timeline rows for <span className="text-foreground">"{orig}"</span>
+                          <span className="text-muted-foreground"> ({importPreview.timeline[orig].length})</span>
+                        </span>
+                        <Select
+                          value={importPreview.timelineMap[orig] || "__discard__"}
+                          onValueChange={(v) =>
+                            setImportPreview((s) => s ? { ...s, timelineMap: { ...s.timelineMap, [orig]: v } } : s)
+                          }
+                        >
+                          <SelectTrigger className="w-[180px] h-7 text-xs font-mono"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__discard__" className="text-xs font-mono">Discard</SelectItem>
+                            {uniqueTargets.map((n) => (
+                              <SelectItem key={n} value={n} className="text-xs font-mono">{n}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ))}
+                    {orphanStakeholders.map((orig) => (
+                      <div key={`sh-${orig}`} className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-mono">
+                          Stakeholder rows for <span className="text-foreground">"{orig}"</span>
+                          <span className="text-muted-foreground"> ({importPreview.stakeholders[orig].length})</span>
+                        </span>
+                        <Select
+                          value={importPreview.stakeholderMap[orig] || "__discard__"}
+                          onValueChange={(v) =>
+                            setImportPreview((s) => s ? { ...s, stakeholderMap: { ...s.stakeholderMap, [orig]: v } } : s)
+                          }
+                        >
+                          <SelectTrigger className="w-[180px] h-7 text-xs font-mono"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__discard__" className="text-xs font-mono">Discard</SelectItem>
+                            {uniqueTargets.map((n) => (
+                              <SelectItem key={n} value={n} className="text-xs font-mono">{n}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setImportPreview(null)}>Cancel</Button>
+            <Button
+              onClick={applyImportPreview}
+              disabled={!importPreview || importPreview.policies.filter((p) => !BUILT_IN_NAMES.has(p.name)).length === 0}
+            >
+              Apply import
             </Button>
           </DialogFooter>
         </DialogContent>
