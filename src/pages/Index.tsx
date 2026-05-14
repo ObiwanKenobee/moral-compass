@@ -1096,9 +1096,33 @@ const Index = () => {
               <span className="text-sm font-mono">Include Stakeholders</span>
             </label>
           </div>
+          <div className="rounded-md border border-border bg-muted/20 px-3 py-2 space-y-1">
+            <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+              <ShieldCheck className="w-3 h-3" />
+              SHA-256 checksum
+            </div>
+            <div className="font-mono text-[10px] break-all text-foreground/80 select-all">
+              {exportChecksum || "Computing…"}
+            </div>
+            <div className="text-[9px] font-mono text-muted-foreground">
+              Identical files (regardless of theme) produce the same hash. Re-export and compare to verify.
+            </div>
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setExportOptions((o) => ({ ...o, open: false }))}>
               Cancel
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (!exportChecksum) return;
+                navigator.clipboard.writeText(exportChecksum).then(
+                  () => toast.success("Checksum copied"),
+                  () => toast.error("Copy failed"),
+                );
+              }}
+            >
+              Copy hash
             </Button>
             <Button
               onClick={() => {
@@ -1109,6 +1133,143 @@ const Index = () => {
               }}
             >
               Export
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import preview dialog: shows count, validation errors, and lets the
+          user map orphan timeline/stakeholder rows to existing policies before
+          applying the import. */}
+      <Dialog
+        open={!!importPreview?.open}
+        onOpenChange={(open) => !open && setImportPreview(null)}
+      >
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-mono text-sm uppercase tracking-widest">
+              Import preview {importPreview ? `· ${importPreview.source.toUpperCase()}` : ""}
+            </DialogTitle>
+            <DialogDescription className="font-mono text-xs">
+              {importPreview?.fileName} — review what will be imported before applying.
+            </DialogDescription>
+          </DialogHeader>
+          {importPreview && (() => {
+            const incomingNames = new Set(importPreview.policies.map((p) => p.name));
+            const importable = importPreview.policies.filter((p) => !BUILT_IN_NAMES.has(p.name));
+            const skippedBuiltIn = importPreview.policies.length - importable.length;
+            const orphanTimeline = Object.keys(importPreview.timeline).filter((k) => !incomingNames.has(k));
+            const orphanStakeholders = Object.keys(importPreview.stakeholders).filter((k) => !incomingNames.has(k));
+            const targetCandidates = [
+              ...importPreview.policies.map((p) => p.name).filter((n) => !BUILT_IN_NAMES.has(n)),
+              ...policies.map((p) => p.name).filter((n) => !BUILT_IN_NAMES.has(n)),
+            ];
+            const uniqueTargets = Array.from(new Set(targetCandidates));
+            return (
+              <div className="space-y-4 py-2">
+                <div className="grid grid-cols-3 gap-2 font-mono text-xs">
+                  <div className="rounded border border-border p-2">
+                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Will import</div>
+                    <div className="text-lg text-primary">{importable.length}</div>
+                  </div>
+                  <div className="rounded border border-border p-2">
+                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Skipped (built-in)</div>
+                    <div className="text-lg">{skippedBuiltIn}</div>
+                  </div>
+                  <div className="rounded border border-border p-2">
+                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Errors</div>
+                    <div className={`text-lg ${importPreview.errors.length ? "text-destructive" : ""}`}>{importPreview.errors.length}</div>
+                  </div>
+                </div>
+
+                {importable.length > 0 && (
+                  <div>
+                    <div className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Policies</div>
+                    <ul className="text-xs font-mono space-y-0.5 max-h-32 overflow-y-auto">
+                      {importable.map((p) => (
+                        <li key={p.name} className="flex items-center justify-between border-b border-border/40 py-1">
+                          <span>{p.name}</span>
+                          <span className="text-muted-foreground text-[10px]">
+                            E{p.economic} · W{p.wellbeing} · Ec{p.ecological} · I{p.intergenerational}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {importPreview.errors.length > 0 && (
+                  <div>
+                    <div className="text-[10px] font-mono uppercase tracking-widest text-destructive mb-1">Validation errors</div>
+                    <ul className="text-xs font-mono space-y-0.5 max-h-32 overflow-y-auto text-destructive/90">
+                      {importPreview.errors.map((er, i) => (
+                        <li key={i}>• {er}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {(orphanTimeline.length > 0 || orphanStakeholders.length > 0) && (
+                  <div className="rounded border border-amber-500/40 bg-amber-500/5 p-3 space-y-3">
+                    <div className="text-[10px] font-mono uppercase tracking-widest text-amber-600 dark:text-amber-400">
+                      Unmatched rows — choose a target or discard
+                    </div>
+                    {orphanTimeline.map((orig) => (
+                      <div key={`tl-${orig}`} className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-mono">
+                          Timeline rows for <span className="text-foreground">"{orig}"</span>
+                          <span className="text-muted-foreground"> ({importPreview.timeline[orig].length})</span>
+                        </span>
+                        <Select
+                          value={importPreview.timelineMap[orig] || "__discard__"}
+                          onValueChange={(v) =>
+                            setImportPreview((s) => s ? { ...s, timelineMap: { ...s.timelineMap, [orig]: v } } : s)
+                          }
+                        >
+                          <SelectTrigger className="w-[180px] h-7 text-xs font-mono"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__discard__" className="text-xs font-mono">Discard</SelectItem>
+                            {uniqueTargets.map((n) => (
+                              <SelectItem key={n} value={n} className="text-xs font-mono">{n}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ))}
+                    {orphanStakeholders.map((orig) => (
+                      <div key={`sh-${orig}`} className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-mono">
+                          Stakeholder rows for <span className="text-foreground">"{orig}"</span>
+                          <span className="text-muted-foreground"> ({importPreview.stakeholders[orig].length})</span>
+                        </span>
+                        <Select
+                          value={importPreview.stakeholderMap[orig] || "__discard__"}
+                          onValueChange={(v) =>
+                            setImportPreview((s) => s ? { ...s, stakeholderMap: { ...s.stakeholderMap, [orig]: v } } : s)
+                          }
+                        >
+                          <SelectTrigger className="w-[180px] h-7 text-xs font-mono"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__discard__" className="text-xs font-mono">Discard</SelectItem>
+                            {uniqueTargets.map((n) => (
+                              <SelectItem key={n} value={n} className="text-xs font-mono">{n}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setImportPreview(null)}>Cancel</Button>
+            <Button
+              onClick={applyImportPreview}
+              disabled={!importPreview || importPreview.policies.filter((p) => !BUILT_IN_NAMES.has(p.name)).length === 0}
+            >
+              Apply import
             </Button>
           </DialogFooter>
         </DialogContent>
