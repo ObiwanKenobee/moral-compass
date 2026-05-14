@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence, Reorder } from "framer-motion";
-import { Pencil, Trash2, Copy, Upload, Download, RotateCcw, GripVertical, Undo2, Redo2 } from "lucide-react";
+import { Pencil, Trash2, Copy, Upload, Download, RotateCcw, GripVertical, Undo2, Redo2, FileText, Info, ShieldCheck } from "lucide-react";
 import MoralCompass from "@/components/atlas/MoralCompass";
 import EthicalLensRadar from "@/components/atlas/EthicalLensRadar";
 import TradeoffSurface from "@/components/atlas/TradeoffSurface";
@@ -42,10 +42,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select as SelectMap, SelectContent as SelectMapContent, SelectItem as SelectMapItem, SelectTrigger as SelectMapTrigger, SelectValue as SelectMapValue } from "@/components/ui/select";
 import {
   buildJsonExport,
   buildCsvExport,
   parsePoliciesCsv,
+  CSV_TEMPLATE,
+  sha256Hex,
 } from "@/lib/policyIO";
 
 interface Policy {
