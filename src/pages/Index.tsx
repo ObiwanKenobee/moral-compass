@@ -429,6 +429,34 @@ const Index = () => {
     stakeholders: boolean;
   }>({ open: false, format: "json", timeline: true, stakeholders: true });
 
+  const [exportChecksum, setExportChecksum] = useState<string>("");
+  const [exportPreviewText, setExportPreviewText] = useState<string>("");
+
+  // ---- Import preview state ----
+  interface ImportPreviewState {
+    open: boolean;
+    source: "csv" | "json";
+    fileName: string;
+    policies: Policy[];
+    timeline: Record<string, TimelineEntry[]>;
+    stakeholders: Record<string, StakeholderEntry[]>;
+    errors: string[];
+    // Per-orphan-row mapping: original policy name -> target policy name (or "__discard__")
+    timelineMap: Record<string, string>;
+    stakeholderMap: Record<string, string>;
+  }
+  const [importPreview, setImportPreview] = useState<ImportPreviewState | null>(null);
+
+  const downloadCsvTemplate = useCallback(() => {
+    const blob = new Blob([CSV_TEMPLATE], { type: "text/csv" });
+    const link = document.createElement("a");
+    link.download = "atlas-policy-template.csv";
+    link.href = URL.createObjectURL(blob);
+    link.click();
+    URL.revokeObjectURL(link.href);
+    toast.success("CSV template downloaded");
+  }, []);
+
   const performResetPolicyOrder = useCallback(() => {
     pushUndo();
     setPolicyOrder(null);
