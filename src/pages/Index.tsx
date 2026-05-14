@@ -807,7 +807,36 @@ const Index = () => {
                   <span className="text-xs font-mono text-muted-foreground">{i + 1}.</span>
                   <span className="text-sm font-mono text-foreground">{p.name}</span>
                   {!BUILT_IN_NAMES.has(p.name) && (
-                    <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4 font-mono">Custom</Badge>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          className="focus:outline-none focus:ring-2 focus:ring-ring rounded-full"
+                          aria-label={`Custom policy details for ${p.name}`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Badge variant="secondary" className="text-[9px] px-1.5 py-0 h-4 font-mono gap-1 cursor-pointer hover:bg-secondary/80">
+                            Custom
+                            <Info className="w-2.5 h-2.5" />
+                          </Badge>
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72 font-mono text-xs space-y-2">
+                        <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Custom Policy</div>
+                        <div><span className="text-muted-foreground">Source:</span> {(policyMeta[p.name]?.source || "manual").toUpperCase()}</div>
+                        <div><span className="text-muted-foreground">Imported:</span> {policyMeta[p.name]?.timestamp ? new Date(policyMeta[p.name].timestamp).toLocaleString() : "—"}</div>
+                        <div>
+                          <span className="text-muted-foreground">Validated fields:</span>
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {(policyMeta[p.name]?.validatedFields || []).map((f) => (
+                              <Badge key={f} variant="outline" className="text-[9px] px-1.5 py-0 h-4">{f}</Badge>
+                            ))}
+                            {!policyMeta[p.name]?.validatedFields?.length && <span className="text-muted-foreground">—</span>}
+                          </div>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  )}
                   )}
                   <motion.span
                     className="text-xs font-mono text-primary"
