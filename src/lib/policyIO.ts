@@ -130,6 +130,30 @@ const STAKEHOLDER_HEADER = ["policy", "group", "benefit", "population", "detail"
 
 const isFiniteNumber = (s: string) => s.trim() !== "" && Number.isFinite(Number(s));
 
+// --- Downloadable CSV template ---
+export const CSV_TEMPLATE = [
+  "# Policies",
+  "name,economic,wellbeing,ecological,intergenerational",
+  "Example Policy,60,55,70,65",
+  "",
+  "# Timeline",
+  "policy,year,positive,negative,confidence",
+  "Example Policy,Year 1-3,Initial benefits realized,Upfront cost,high",
+  "",
+  "# Stakeholders",
+  "policy,group,benefit,population,detail",
+  "Example Policy,Urban Residents,40,1.2M,Improved services",
+].join("\n");
+
+// --- SHA-256 helper using Web Crypto (browser) ---
+export const sha256Hex = async (text: string): Promise<string> => {
+  const enc = new TextEncoder().encode(text);
+  const buf = await crypto.subtle.digest("SHA-256", enc);
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+};
+
 export const parsePoliciesCsv = (text: string): CsvImportResult => {
   const policies: Policy[] = [];
   const timeline: Record<string, TimelineEntry[]> = {};
