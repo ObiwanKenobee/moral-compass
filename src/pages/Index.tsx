@@ -713,6 +713,16 @@ const Index = () => {
                   <Upload className="w-3 h-3" />
                   Import
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={downloadCsvTemplate}
+                  className="h-8 text-xs font-mono gap-1.5 border-border"
+                  title="Download a CSV template with the expected columns"
+                >
+                  <FileText className="w-3 h-3" />
+                  Template
+                </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="sm" className="h-8 text-xs font-mono gap-1.5 border-border">
