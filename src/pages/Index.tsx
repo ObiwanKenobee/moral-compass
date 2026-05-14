@@ -137,7 +137,14 @@ const LS_KEYS = {
   policies: "atlas-custom-policies",
   timeline: "atlas-custom-timeline",
   stakeholders: "atlas-custom-stakeholders",
+  meta: "atlas-policy-meta",
 };
+
+interface PolicyMeta {
+  source: "csv" | "json" | "manual";
+  timestamp: number;
+  validatedFields: string[];
+}
 
 function loadCustomData() {
   try {
@@ -165,6 +172,14 @@ const Index = () => {
     const { customStakeholders } = loadCustomData();
     return { ...INITIAL_STAKEHOLDERS, ...customStakeholders };
   });
+
+  const [policyMeta, setPolicyMeta] = useState<Record<string, PolicyMeta>>(() => {
+    try { return JSON.parse(localStorage.getItem(LS_KEYS.meta) || "{}"); }
+    catch { return {}; }
+  });
+  useEffect(() => {
+    localStorage.setItem(LS_KEYS.meta, JSON.stringify(policyMeta));
+  }, [policyMeta]);
 
   // Persist custom policies to localStorage
   useEffect(() => {
