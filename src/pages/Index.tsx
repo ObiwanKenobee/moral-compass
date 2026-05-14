@@ -837,7 +837,6 @@ const Index = () => {
                       </PopoverContent>
                     </Popover>
                   )}
-                  )}
                   <motion.span
                     className="text-xs font-mono text-primary"
                     key={p.score.toFixed(1)}
