@@ -346,6 +346,11 @@ const Index = () => {
       delete next[deletingPolicy];
       return next;
     });
+    setPolicyMeta((prev) => {
+      const next = { ...prev };
+      delete next[deletingPolicy];
+      return next;
+    });
     setDeletingPolicy(null);
   }, [deletingPolicy, pushUndo]);
 
@@ -418,12 +423,14 @@ const Index = () => {
     setPolicies([...INITIAL_POLICIES]);
     setTimelineData({ ...INITIAL_TIMELINE });
     setStakeholderData({ ...INITIAL_STAKEHOLDERS });
+    setPolicyMeta({});
     setEditingPolicy(null);
     setDeletingPolicy(null);
     setPolicyOrder(null);
     localStorage.removeItem(LS_KEYS.policies);
     localStorage.removeItem(LS_KEYS.timeline);
     localStorage.removeItem(LS_KEYS.stakeholders);
+    localStorage.removeItem(LS_KEYS.meta);
     localStorage.removeItem("atlas-policy-order");
     toast.success("All custom policies cleared");
   }, [pushUndo]);
