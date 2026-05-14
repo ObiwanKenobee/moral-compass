@@ -472,6 +472,23 @@ const Index = () => {
     toast.success("CSV template downloaded");
   }, []);
 
+  // Recompute the export preview + SHA-256 checksum whenever the user changes
+  // export options, so the dialog can show a stable hash that will match the
+  // downloaded file (and is identical across themes).
+  useEffect(() => {
+    if (!exportOptions.open) return;
+    const custom = policies.filter((p) => !BUILT_IN_NAMES.has(p.name));
+    const opts = { timeline: exportOptions.timeline, stakeholders: exportOptions.stakeholders };
+    const text = exportOptions.format === "json"
+      ? buildJsonExport({ policies: custom, timeline: timelineData, stakeholders: stakeholderData }, opts)
+      : buildCsvExport({ policies: custom, timeline: timelineData, stakeholders: stakeholderData }, opts);
+    setExportPreviewText(text);
+    setExportChecksum("");
+    let cancelled = false;
+    sha256Hex(text).then((h) => { if (!cancelled) setExportChecksum(h); });
+    return () => { cancelled = true; };
+  }, [exportOptions, policies, timelineData, stakeholderData]);
+
   const performResetPolicyOrder = useCallback(() => {
     pushUndo();
     setPolicyOrder(null);
